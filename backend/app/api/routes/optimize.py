@@ -1,9 +1,9 @@
 """
-Optimization endpoint — triggers the full agent pipeline.
+Optimization endpoint — triggers the full LangGraph agent pipeline.
 
-POST /optimize is now a thin wrapper around the orchestrator.
-It loads data from the DB, calls orchestrator.run_pipeline(),
-saves the resulting plan to the DB, and returns the unified response.
+POST /optimize loads data from the DB, runs the LangGraph state graph
+(Validate → Reason → Decide → Act → Learn), saves results to the DB,
+and returns the unified response.
 
 Query params for pipeline configuration:
 - run_simulation: run the 4 scenario simulations (default true)
@@ -20,7 +20,7 @@ from backend.app.models.plan import (
     ConsolidationPlan, PlanAssignment, ScenarioResult,
     PlanStatusEnum, ScenarioTypeEnum,
 )
-from backend.app.agents.orchestrator import run_pipeline
+from backend.app.agents.langgraph_pipeline import run_pipeline
 import json
 
 router = APIRouter()
@@ -36,27 +36,18 @@ def _empty_response(message: str, count: int, is_vehicle_error: bool = False) ->
         "validation": {
             "is_valid": False,
             "errors": [{"severity": "ERROR", "shipment_id": None, "field": None, "message": message}],
-            "warnings": [],
-            "info": [],
+            "warnings": [], "info": [],
             "summary_counts": {
                 "total_shipments": 0 if not is_vehicle_error else count,
                 "total_vehicles": count if not is_vehicle_error else 0,
-                "error_count": 1,
-                "warning_count": 0,
-                "info_count": 0,
+                "error_count": 1, "warning_count": 0, "info_count": 0,
             },
             "llm_summary": None,
         },
-        "plan": None,
-        "insights": None,
-        "relaxation": None,
-        "scenarios": None,
-        "scenario_analysis": None,
-        "pipeline_metadata": {
-            "steps": [],
-            "total_duration_ms": 0,
-            "config": {},
-        },
+        "plan": None, "compatibility": None, "guardrail": None,
+        "insights": None, "relaxation": None,
+        "scenarios": None, "scenario_analysis": None, "metrics": None,
+        "pipeline_metadata": {"steps": [], "total_duration_ms": 0, "retry_count": 0, "config": {}},
     }
 
 
@@ -70,18 +61,16 @@ def run_optimization(
     db: Session = Depends(get_db),
 ):
     """
-    Trigger the full optimization pipeline via the agent orchestrator.
+    Trigger the full LangGraph optimization pipeline.
 
     This endpoint:
     1. Loads all shipments and vehicles from the database
-    2. Passes them to the orchestrator which runs the full agent pipeline
+    2. Runs the LangGraph state graph (all 9 nodes with conditional routing)
     3. Saves the resulting plan, assignments, and scenario results to the DB
-    4. Returns the unified response with all agent outputs
+    4. Returns the unified response with all agent + solver outputs
 
-    The query params let the frontend control pipeline behavior:
-    - Skip simulation for faster dev runs
-    - Skip LLM for offline/no-API-key environments
-    - Adjust scenario weights for different priority profiles
+    The response always has the same shape — null fields for steps that
+    didn't run. The frontend renders different panels based on what's present.
     """
     # --- Load data from DB and convert to plain dicts ---
     shipment_rows = db.query(Shipment).all()
@@ -114,7 +103,7 @@ def run_optimization(
         for v in vehicle_rows
     ]
 
-    # Handle empty database before calling the orchestrator
+    # Handle empty database
     if not shipments:
         return _empty_response(
             "No shipments found. Upload shipments first via POST /shipments or POST /dev/seed.",
@@ -123,11 +112,10 @@ def run_optimization(
     if not vehicles:
         return _empty_response(
             "No vehicles found. Seed vehicle fleet first via POST /dev/seed.",
-            len(shipments),
-            is_vehicle_error=True,
+            len(shipments), is_vehicle_error=True,
         )
 
-    # --- Run the full agent pipeline ---
+    # --- Run the LangGraph pipeline ---
     config = {
         "run_simulation": run_simulation,
         "run_llm": run_llm,
@@ -139,15 +127,9 @@ def run_optimization(
     result = run_pipeline(shipments, vehicles, config)
 
     # --- Persist results to DB ---
-    # Save the consolidation plan if one was generated successfully
     plan_data = result.get("plan")
     if plan_data and plan_data.get("status") not in ("FAILED", None):
-
-        # Map the orchestrator's status string to the DB enum
-        if plan_data.get("status") == "INFEASIBLE":
-            db_status = PlanStatusEnum.DRAFT
-        else:
-            db_status = PlanStatusEnum.OPTIMIZED
+        db_status = PlanStatusEnum.DRAFT if plan_data.get("is_infeasible") else PlanStatusEnum.OPTIMIZED
 
         db_plan = ConsolidationPlan(
             status=db_status,
@@ -161,13 +143,12 @@ def run_optimization(
         db.commit()
         db.refresh(db_plan)
 
-        # Inject the DB-generated plan ID and timestamp back into the response
-        # so the frontend has them immediately without a second API call
+        # Inject DB-generated ID into the response
         result["plan"]["id"] = db_plan.id
         result["plan"]["created_at"] = db_plan.created_at.isoformat() if db_plan.created_at else None
 
-        # Save vehicle-to-shipment assignments if the solver produced any
-        for assignment in plan_data.get("assignments", []):
+        # Save assignments
+        for assignment in plan_data.get("assigned", []):
             db_assignment = PlanAssignment(
                 plan_id=db_plan.id,
                 vehicle_id=assignment.get("vehicle_id", ""),
@@ -177,13 +158,11 @@ def run_optimization(
             )
             db.add(db_assignment)
 
-        # Save scenario simulation results if the simulation step ran
-        scenarios = result.get("scenarios") or []
-        for scenario in scenarios:
+        # Save scenario results
+        for scenario in (result.get("scenarios") or []):
             try:
                 scenario_type = ScenarioTypeEnum(scenario.get("scenario_type", ""))
             except ValueError:
-                # Skip unknown scenario types instead of crashing
                 continue
 
             db_scenario = ScenarioResult(
