@@ -2,8 +2,8 @@
 FastAPI application entry point.
 
 Sets up the app, configures CORS (wide open for dev — lock down in prod),
-and creates all database tables on startup. This file is the single place
-where the app boots — uvicorn points here.
+registers all API routers, and creates database tables on startup.
+This file is the single place where the app boots — uvicorn points here.
 
 Run with:
     uvicorn backend.app.main:app --reload
@@ -14,11 +14,12 @@ from fastapi.middleware.cors import CORSMiddleware
 from backend.app.db.base import Base
 from backend.app.db.session import engine
 
-# This import looks unused, but it's critical — it forces Python to load
-# all our ORM model classes so that Base.metadata.create_all() below
-# actually knows about the tables it needs to create.
+# Import all models so Base.metadata.create_all knows about every table.
+# Looks unused, but without this the tables won't get created.
 import backend.app.models  # noqa
 
+# Import all route modules
+from backend.app.api.routes import shipments, optimize, plan, simulate, metrics, seed
 
 app = FastAPI(
     title="Lorri — AI Load Consolidation Engine",
@@ -36,6 +37,16 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# --- Register all API routers ---
+# Each router handles one logical group of endpoints.
+# No prefix on shipments/optimize/etc. since the routes already define their paths.
+app.include_router(shipments.router, tags=["Shipments"])
+app.include_router(optimize.router, tags=["Optimization"])
+app.include_router(plan.router, tags=["Plans"])
+app.include_router(simulate.router, tags=["Simulation"])
+app.include_router(metrics.router, tags=["Metrics"])
+app.include_router(seed.router, prefix="/dev", tags=["Dev Tools"])
 
 
 @app.on_event("startup")
