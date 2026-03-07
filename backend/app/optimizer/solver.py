@@ -158,6 +158,14 @@ def solve_mip(
     if has_valid_times:
         for i in range(n_shipments):
             for j in range(i + 1, n_shipments):
+                # Apply this simplified overlap rule only for same-lane pairs.
+                # For different lanes, strict interval overlap is overly restrictive
+                # without full route sequencing variables.
+                same_origin = shipments[i].get("origin") == shipments[j].get("origin")
+                same_destination = shipments[i].get("destination") == shipments[j].get("destination")
+                if not (same_origin and same_destination):
+                    continue
+
                 # If both are on the same truck, the latest pickup must be
                 # before the earliest delivery. If this is violated,
                 # they can't share a truck.
