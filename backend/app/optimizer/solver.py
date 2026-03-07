@@ -81,7 +81,7 @@ def solve_mip(
 
     model = cp_model.CpModel()
 
-    # --- Decision variables ---
+    #  Decision variables 
 
     # x[i][k] = 1 if shipment i is assigned to vehicle k
     x = {}
@@ -94,7 +94,7 @@ def solve_mip(
     for k in range(n_vehicles):
         y[k] = model.NewBoolVar(f"y_{k}")
 
-    # --- Constraints ---
+    #  Constraints 
 
     # Constraint 1: Each shipment assigned to exactly one vehicle
     for i in range(n_shipments):
@@ -202,7 +202,7 @@ def solve_mip(
                     for k in range(n_vehicles):
                         model.Add(x[i, k] + x[j, k] <= 1)
 
-    # --- Objective ---
+    #  Objective 
     # Minimize: Σ operating_cost_k · y_k − α · Σ (weight_i · x[i,k]) / capacity_k
     # The first term minimizes cost, the second rewards higher utilization.
     # We scale everything to integers for CP-SAT.
@@ -229,7 +229,7 @@ def solve_mip(
 
     model.Minimize(sum(objective_terms))
 
-    # --- Solve ---
+    #  Solve 
     solver = cp_model.CpSolver()
     solver.parameters.max_time_in_seconds = time_limit_seconds
     # Use multiple workers for parallel search
@@ -237,7 +237,7 @@ def solve_mip(
 
     status = solver.Solve(model)
 
-    # --- Parse solution ---
+    #  Parse solution 
     if status in (cp_model.OPTIMAL, cp_model.FEASIBLE):
         return _parse_solution(
             solver, x, y, shipments, vehicles, status, compatibility_graph

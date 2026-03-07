@@ -37,8 +37,10 @@ from backend.app.agents.relaxation_agent import run_relaxation_analysis
 from backend.app.agents.scenario_agent import run_scenario_analysis
 from backend.app.agents.guardrail import run_guardrail
 from backend.app.agents.tools.compatibility_scoring_tool import score_shipment_pairs
+from backend.app.agents.tools.scenario_simulation_tool import run_all_scenarios
 from backend.app.agents.tools.shipment_data_tool import fetch_shipment_data
 from backend.app.agents.tools.optimization_tool import run_optimization
+from backend.app.optimizer.metrics import compute_full_metrics
 
 # ---------------------------------------------------------------------------
 # AgentState — the typed state that flows through the entire graph
@@ -419,40 +421,49 @@ def relaxation_node(state: AgentState) -> dict:
 
 def simulation_node(state: AgentState) -> dict:
     """
-    SIMULATION — Run all 4 scenario simulations.
+    SIMULATION — Run all 4 scenario simulations using the actual solver.
 
-    Re-runs the solver with modified constraints for each scenario:
-    - STRICT_SLA: original time windows, no relaxation
-    - FLEXIBLE_SLA: windows expanded ±30 min
-    - VEHICLE_SHORTAGE: only 70% of fleet available
-    - DEMAND_SURGE: 1.5x shipment volume
-
-    Currently placeholder metrics — will use real solver re-runs later.
+    Each scenario modifies the inputs (time windows, fleet size, demand)
+    and re-runs the optimizer to produce real metrics. Results feed
+    into the Scenario Recommendation Agent for comparison.
     """
     start = time.time()
 
     # Check if simulation is enabled in config
     if not state["config"].get("run_simulation", True):
-        timing = {"step": "Simulation Engine", "status": "skipped", "duration_ms": 0, "error": "Skipped by config"}
+        timing = {"step": "Simulation Engine", "status": "skipped", "duration_ms": 0,
+                  "error": "Skipped by config"}
         return {
             "scenario_results": None,
             "step_timings": state["step_timings"] + [timing],
         }
 
-    # --- PLACEHOLDER: real simulation engine goes here ---
-    scenarios = [
-        {"scenario_type": "STRICT_SLA", "trucks_used": 12, "avg_utilization": 72.5,
-         "total_cost": 45000.0, "carbon_emissions": 1200.0, "sla_success_rate": 95.0},
-        {"scenario_type": "FLEXIBLE_SLA", "trucks_used": 9, "avg_utilization": 85.3,
-         "total_cost": 35000.0, "carbon_emissions": 950.0, "sla_success_rate": 88.0},
-        {"scenario_type": "VEHICLE_SHORTAGE", "trucks_used": 7, "avg_utilization": 91.0,
-         "total_cost": 38000.0, "carbon_emissions": 1050.0, "sla_success_rate": 78.0},
-        {"scenario_type": "DEMAND_SURGE", "trucks_used": 15, "avg_utilization": 68.0,
-         "total_cost": 55000.0, "carbon_emissions": 1500.0, "sla_success_rate": 70.0},
-    ]
+    try:
+        # Get the compatibility graph from the Reason phase
+        graph_object = None
+        compat = state.get("compatibility_scores")
+        if compat:
+            graph_object = compat.get("graph_object")
+
+        # Run all 4 scenarios with the actual solver
+        scenarios = run_all_scenarios(
+            shipments=state["shipments"],
+            vehicles=state["vehicles"],
+            compatibility_graph=graph_object,
+        )
+
+        status = "completed"
+        error = None
+
+    except Exception as e:
+        scenarios = []
+        status = "failed"
+        error = str(e)
+        print(f"[Simulation Node] Failed: {e}")
 
     duration = (time.time() - start) * 1000
-    timing = {"step": "Simulation Engine", "status": "completed", "duration_ms": round(duration, 1), "error": None}
+    timing = {"step": "Simulation Engine", "status": status,
+              "duration_ms": round(duration, 1), "error": error}
 
     return {
         "scenario_results": scenarios,
@@ -525,31 +536,40 @@ def scenario_rec_node(state: AgentState) -> dict:
 
 def metrics_node(state: AgentState) -> dict:
     """
-    LEARN PHASE — Compute final before/after metrics.
+    LEARN PHASE — Compute comprehensive before/after metrics.
 
-    Summarizes the entire optimization run into impact metrics:
-    trips saved, cost reduction, carbon savings, utilization improvement.
-    These feed the dashboard's impact summary cards.
+    Uses the full metrics module to calculate distance-based carbon
+    savings, per-truck breakdowns, and fleet usage stats. These feed
+    the dashboard's impact summary cards and comparison charts.
     """
     start = time.time()
 
-    plan = state.get("consolidation_plan", {})
+    try:
+        plan = state.get("consolidation_plan", {})
+        assignments = plan.get("assigned", [])
 
-    metrics = {
-        "trips_baseline": plan.get("trips_baseline", len(state["shipments"])),
-        "trucks_used": plan.get("total_trucks", 0),
-        "trips_saved": plan.get("trips_baseline", 0) - plan.get("total_trucks", 0),
-        "avg_utilization": plan.get("avg_utilization", 0),
-        "cost_saving_pct": plan.get("cost_saving_pct", 0),
-        "carbon_saving_pct": plan.get("carbon_saving_pct", 0),
-        "total_shipments": len(state["shipments"]),
-        "total_vehicles": len(state["vehicles"]),
-        "retries_used": state["retry_count"],
-        "constraint_violations_total": len(state.get("constraint_violations") or []),
-    }
+        metrics = compute_full_metrics(
+            assignments=assignments,
+            shipments=state["shipments"],
+            vehicles=state["vehicles"],
+        )
+
+        status = "completed"
+        error = None
+
+    except Exception as e:
+        metrics = {
+            "error": str(e),
+            "before": {}, "after": {}, "savings": {},
+            "fleet": {}, "per_truck": [],
+        }
+        status = "failed"
+        error = str(e)
+        print(f"[Metrics Node] Failed: {e}")
 
     duration = (time.time() - start) * 1000
-    timing = {"step": "Metrics Engine", "status": "completed", "duration_ms": round(duration, 1), "error": None}
+    timing = {"step": "Metrics Engine", "status": status,
+              "duration_ms": round(duration, 1), "error": error}
 
     return {
         "metrics": metrics,
