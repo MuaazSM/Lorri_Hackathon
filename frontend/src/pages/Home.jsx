@@ -52,8 +52,8 @@ const FEATURES = [
   {
     num: '02',
     tag: 'Intelligence',
-    title: 'Four-Agent LangChain Pipeline',
-    desc: 'A sequential AI pipeline validates inputs, explains outputs in plain language, relaxes blocking constraints, and recommends the best plan across all scenarios.',
+    title: 'Four-Agent LangGraph Pipeline',
+    desc: 'An agentic decision loop validates inputs, explains outputs in plain language, relaxes blocking constraints, and recommends the best plan across all scenarios.',
     bullets: ['Validation before solve', 'Human-readable insights', 'Constraint relaxation suggestions'],
     to: '/insights',
   },
@@ -723,7 +723,7 @@ export default function Home() {
           </h1>
 
           <p className="hero-sub">
-            {['Lorri','uses','OR-Tools','+','LangChain','agents','to','consolidate','your','shipments','—','cutting','trips,','costs,','and','carbon','in','seconds.'].map((w, i) => (
+            {['Lorri','uses','OR-Tools','+','LangGraph','agents','to','consolidate','your','shipments','—','cutting','trips,','costs,','and','carbon','in','seconds.'].map((w, i) => (
               <span key={i} className="blur-word-sub" style={{ animationDelay: `${0.65 + i * 0.042}s`, marginRight: '0.3em' }}>{w}</span>
             ))}
           </p>
@@ -748,11 +748,11 @@ export default function Home() {
       {/* ════ MARQUEE ════ */}
       <div className="marquee-wrap">
         <div className="marquee-track">
-          {['Load Consolidation','Fewer Trucks','Lower Costs','Less Carbon','OR-Tools Solver','AI Insights','Smart Routing','Max Utilization','Time Windows','Heuristic Fallback','LangChain Agents','Scenario Engine'].flatMap((t,i) => [
+          {['Load Consolidation','Fewer Trucks','Lower Costs','Less Carbon','OR-Tools Solver','AI Insights','Smart Routing','Max Utilization','Time Windows','Heuristic Fallback','LangGraph Agents','Scenario Engine'].flatMap((t,i) => [
             <span key={`a${i}`} className="marquee-item">{t}</span>,
             <span key={`d${i}`} className="marquee-item marquee-dot">·</span>,
           ]).concat(
-            ['Load Consolidation','Fewer Trucks','Lower Costs','Less Carbon','OR-Tools Solver','AI Insights','Smart Routing','Max Utilization','Time Windows','Heuristic Fallback','LangChain Agents','Scenario Engine'].flatMap((t,i) => [
+            ['Load Consolidation','Fewer Trucks','Lower Costs','Less Carbon','OR-Tools Solver','AI Insights','Smart Routing','Max Utilization','Time Windows','Heuristic Fallback','LangGraph Agents','Scenario Engine'].flatMap((t,i) => [
               <span key={`b${i}`} className="marquee-item">{t}</span>,
               <span key={`e${i}`} className="marquee-item marquee-dot">·</span>,
             ])
@@ -945,10 +945,10 @@ export default function Home() {
               Lorri
             </div>
             <p className="footer-desc">
-              AI-powered load consolidation. Fewer trucks, lower costs, less carbon — optimized in seconds using OR-Tools and LangChain.
+              AI-powered load consolidation. Fewer trucks, lower costs, less carbon — optimized in seconds using OR-Tools and LangGraph.
             </p>
             <div className="footer-badges">
-              {['OR-Tools','LangChain','FastAPI','React','Leaflet','Recharts'].map(t => (
+              {['OR-Tools','LangGraph','FastAPI','React','Leaflet','Recharts'].map(t => (
                 <span key={t} className="footer-badge">{t}</span>
               ))}
             </div>
@@ -961,7 +961,7 @@ export default function Home() {
           </div>
           <div>
             <div className="footer-col-title">Stack</div>
-            {['OR-Tools MIP','LangChain Agents','scikit-learn','Leaflet Maps','Recharts','SQLite / PG'].map(t => (
+            {['OR-Tools MIP','LangGraph Agents','scikit-learn','Leaflet Maps','Recharts','SQLite / PG'].map(t => (
               <span key={t} className="footer-link">{t}</span>
             ))}
           </div>

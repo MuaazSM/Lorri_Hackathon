@@ -1,7 +1,8 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import Navbar from '@/components/layout/Navbar'
 import { MapPin } from 'lucide-react'
+import { useApp } from '@/context/AppContext'
 
 /* ─────────────────────────────────────────────
    ✏️ EDIT: Shipment & truck data
@@ -130,10 +131,84 @@ export default function Shipments() {
   const nav = useNavigate()
   const [filter,   setFilter]   = useState('All')
   const [selected, setSelected] = useState(null)
+  const { shipments: apiShipments, optimizationResult } = useApp()
 
-  const filtered    = filter === 'All' ? SHIPMENTS : SHIPMENTS.filter(s => `${s.origin} → ${s.dest}` === filter)
-  const selShipment = SHIPMENTS.find(s => s.id === selected)
-  const selTruck    = selShipment ? TRUCKS.find(t => t.id === selShipment.truck) : null
+  // Map API shipments + optimization assignments to the page's expected shape
+  const liveData = useMemo(() => {
+    if (!apiShipments?.length) return null
+
+    // Build truck assignment lookup from optimization result
+    const assignmentMap = {}
+    const trucksArr = []
+    const plan = optimizationResult?.plan
+    const TRUCK_COLORS = ['#f59e0b', '#10b981', '#06b6d4', '#8b5cf6', '#ec4899']
+    if (plan?.assigned) {
+      plan.assigned.forEach((a, idx) => {
+        const groupId = `G${idx + 1}`
+        const color = TRUCK_COLORS[idx % TRUCK_COLORS.length]
+        ;(a.shipment_ids || []).forEach(sid => {
+          assignmentMap[sid] = { truck: a.vehicle_id, group: groupId, color }
+        })
+        trucksArr.push({
+          id: a.vehicle_id,
+          route: a.route || 'N/A',
+          shipments: a.shipment_ids || [],
+          util: a.utilization_pct || 0,
+          load: a.total_weight || 0,
+          cap: a.capacity_weight || 0,
+          color,
+        })
+      })
+    }
+
+    const shipments = apiShipments.map(s => {
+      const assign = assignmentMap[s.shipment_id] || {}
+      const pTime = s.pickup_time ? new Date(s.pickup_time) : null
+      const dTime = s.delivery_time ? new Date(s.delivery_time) : null
+      const window = pTime && dTime
+        ? `${String(pTime.getHours()).padStart(2,'0')}:${String(pTime.getMinutes()).padStart(2,'0')}–${String(dTime.getHours()).padStart(2,'0')}:${String(dTime.getMinutes()).padStart(2,'0')}`
+        : '—'
+      const priority = s.priority ? s.priority.charAt(0).toUpperCase() + s.priority.slice(1).toLowerCase() : 'Medium'
+      const status = assign.truck ? 'Consolidated' : (s.status === 'ASSIGNED' ? 'Assigned' : 'Pending')
+      return {
+        id: s.shipment_id,
+        origin: s.origin,
+        dest: s.destination,
+        weight: s.weight,
+        volume: s.volume,
+        priority,
+        window,
+        status,
+        truck: assign.truck || '—',
+        group: assign.group || '—',
+        _color: assign.color || '#6b7280',
+      }
+    })
+
+    const totalWeight = shipments.reduce((sum, s) => sum + s.weight, 0)
+    const avgUtil = trucksArr.length ? Math.round(trucksArr.reduce((s, t) => s + t.util, 0) / trucksArr.length) : 0
+    const stats = [
+      { num: String(shipments.length), label: 'Total Shipments', sub: 'this batch' },
+      { num: String(trucksArr.length || '—'), label: 'Trucks Assigned', sub: 'MIP solution' },
+      { num: `${totalWeight.toLocaleString()}kg`, label: 'Total Weight', sub: 'all lanes' },
+      { num: `${avgUtil}%`, label: 'Avg Utilization', sub: 'across fleet' },
+    ]
+
+    const laneSet = new Set(shipments.map(s => `${s.origin} → ${s.dest}`))
+    const lanes = ['All', ...laneSet]
+
+    return { shipments, trucks: trucksArr, stats, lanes }
+  }, [apiShipments, optimizationResult])
+
+  // Use API data if available, otherwise fallback to demo
+  const shipmentList = liveData?.shipments || SHIPMENTS
+  const truckList    = liveData?.trucks?.length ? liveData.trucks : TRUCKS
+  const statList     = liveData?.stats || STATS
+  const laneList     = liveData?.lanes || LANES
+
+  const filtered    = filter === 'All' ? shipmentList : shipmentList.filter(s => `${s.origin} → ${s.dest}` === filter)
+  const selShipment = shipmentList.find(s => s.id === selected)
+  const selTruck    = selShipment ? truckList.find(t => t.id === selShipment.truck) : null
 
   return (
     <div className="lorri-page">
@@ -590,11 +665,11 @@ export default function Shipments() {
       {/* ✏️ EDIT: change the marquee words */}
       <div className="marquee-wrap">
         <div className="marquee-track">
-          {['Route Visibility','Mumbai · Pune · Delhi','Load Consolidation','3 Active Trucks','OR-Tools MIP','6 Shipments','4,100 kg Load','76% Utilization','Colour-Coded Groups','LangChain Agents','Live Globe Map','Time Windows'].flatMap((t,i) => [
+          {['Route Visibility','Mumbai · Pune · Delhi','Load Consolidation','3 Active Trucks','OR-Tools MIP','6 Shipments','4,100 kg Load','76% Utilization','Colour-Coded Groups','LangGraph Agents','Live Globe Map','Time Windows'].flatMap((t,i) => [
             <span key={`a${i}`} className="marquee-item">{t}</span>,
             <span key={`d${i}`} className="marquee-item marquee-dot">·</span>,
           ]).concat(
-            ['Route Visibility','Mumbai · Pune · Delhi','Load Consolidation','3 Active Trucks','OR-Tools MIP','6 Shipments','4,100 kg Load','76% Utilization','Colour-Coded Groups','LangChain Agents','Live Globe Map','Time Windows'].flatMap((t,i) => [
+            ['Route Visibility','Mumbai · Pune · Delhi','Load Consolidation','3 Active Trucks','OR-Tools MIP','6 Shipments','4,100 kg Load','76% Utilization','Colour-Coded Groups','LangGraph Agents','Live Globe Map','Time Windows'].flatMap((t,i) => [
               <span key={`b${i}`} className="marquee-item">{t}</span>,
               <span key={`e${i}`} className="marquee-item marquee-dot">·</span>,
             ])
@@ -605,7 +680,7 @@ export default function Shipments() {
       {/* ════ STATS ════ */}
       {/* ✏️ EDIT: stat values are in the STATS array at the top of the file */}
       <div className="stats-grid">
-        {STATS.map(({ num, label, sub }) => (
+        {statList.map(({ num, label, sub }) => (
           <div key={label} className="stat-cell">
             <div className="stat-num">{num}</div>
             <div className="stat-label">{label}</div>
@@ -629,7 +704,7 @@ export default function Shipments() {
           {/* ── Lane filter pills ── */}
           {/* ✏️ EDIT: LANES array at the top controls these */}
           <div style={{ display:'flex', gap:'0.6rem', flexWrap:'wrap', marginBottom:'1.5rem' }}>
-            {LANES.map(lane => (
+            {laneList.map(lane => (
               <button key={lane} className={`filter-pill${filter === lane ? ' active' : ''}`}
                 onClick={() => { setFilter(lane); setSelected(null) }}
               >{lane}</button>
@@ -690,8 +765,8 @@ export default function Shipments() {
                   {filtered.map(s => (
                     <tr key={s.id} className={selected === s.id ? 'sel' : ''} onClick={() => setSelected(selected === s.id ? null : s.id)}>
                       <td>
-                        <span style={{ fontFamily:"'JetBrains Mono',monospace", fontWeight:700, color:GROUP_COLORS[s.group], display:'flex', alignItems:'center', gap:6 }}>
-                          <span style={{ width:7, height:7, borderRadius:'50%', background:GROUP_COLORS[s.group], display:'inline-block', boxShadow:`0 0 6px ${GROUP_COLORS[s.group]}` }}/>
+                        <span style={{ fontFamily:"'JetBrains Mono',monospace", fontWeight:700, color:s._color || GROUP_COLORS[s.group] || '#6b7280', display:'flex', alignItems:'center', gap:6 }}>
+                          <span style={{ width:7, height:7, borderRadius:'50%', background:s._color || GROUP_COLORS[s.group] || '#6b7280', display:'inline-block', boxShadow:`0 0 6px ${s._color || GROUP_COLORS[s.group] || '#6b7280'}` }}/>
                           {s.id}
                         </span>
                       </td>
@@ -720,9 +795,9 @@ export default function Shipments() {
 
               {/* Shipment detail drawer — appears on row click */}
               {selShipment && (
-                <div className="sidebar-card" style={{ borderColor:`${GROUP_COLORS[selShipment.group]}44`, animation:'fadeSlideUp 0.3s ease forwards' }}>
+                <div className="sidebar-card" style={{ borderColor:`${selShipment._color || GROUP_COLORS[selShipment.group] || '#6b7280'}44`, animation:'fadeSlideUp 0.3s ease forwards' }}>
                   <div className="sidebar-card-header">
-                    <span style={{ fontFamily:"'Syne',sans-serif", fontSize:'1rem', fontWeight:700, color:GROUP_COLORS[selShipment.group] }}>{selShipment.id}</span>
+                    <span style={{ fontFamily:"'Syne',sans-serif", fontSize:'1rem', fontWeight:700, color:selShipment._color || GROUP_COLORS[selShipment.group] || '#6b7280' }}>{selShipment.id}</span>
                     <button onClick={() => setSelected(null)} style={{ background:'none', border:'none', cursor:'pointer', color:'var(--text-muted)', fontSize:'1rem', lineHeight:1, transition:'color 0.2s' }}
                       onMouseEnter={e=>e.currentTarget.style.color='var(--page-accent)'}
                       onMouseLeave={e=>e.currentTarget.style.color='var(--text-muted)'}
@@ -772,7 +847,7 @@ export default function Shipments() {
                   <span style={{ fontSize:'0.68rem', fontFamily:"'JetBrains Mono',monospace", color:'var(--text-muted)', textTransform:'uppercase', letterSpacing:'0.12em' }}>/ fleet utilization</span>
                 </div>
                 <div className="sidebar-card-body" style={{ display:'flex', flexDirection:'column', gap:'0.75rem' }}>
-                  {TRUCKS.map(t => (
+                  {truckList.map(t => (
                     <div key={t.id} onClick={() => setSelected(t.shipments[0])}
                       style={{ background:'rgba(255,255,255,0.02)', border:'1px solid var(--border)', borderRadius:12, padding:'0.9rem 1rem', cursor:'pointer', transition:'all 0.2s' }}
                       onMouseEnter={e=>{ e.currentTarget.style.borderColor=`${t.color}55`; e.currentTarget.style.boxShadow=`0 0 16px ${t.color}18` }}
@@ -819,9 +894,9 @@ export default function Shipments() {
               </svg>
               Lorri
             </div>
-            <p className="footer-desc">AI-powered load consolidation. Fewer trucks, lower costs, less carbon — optimized in seconds using OR-Tools and LangChain.</p>
+            <p className="footer-desc">AI-powered load consolidation. Fewer trucks, lower costs, less carbon — optimized in seconds using OR-Tools and LangGraph.</p>
             <div className="footer-badges">
-              {['OR-Tools','LangChain','FastAPI','React','Globe.gl','Recharts'].map(t => (
+              {['OR-Tools','LangGraph','FastAPI','React','Globe.gl','Recharts'].map(t => (
                 <span key={t} className="footer-badge">{t}</span>
               ))}
             </div>
@@ -834,7 +909,7 @@ export default function Shipments() {
           </div>
           <div>
             <div className="footer-col-title">Stack</div>
-            {['OR-Tools MIP','LangChain Agents','scikit-learn','Globe.gl','Recharts','SQLite / PG'].map(t => (
+            {['OR-Tools MIP','LangGraph Agents','scikit-learn','Globe.gl','Recharts','SQLite / PG'].map(t => (
               <span key={t} className="footer-link">{t}</span>
             ))}
           </div>

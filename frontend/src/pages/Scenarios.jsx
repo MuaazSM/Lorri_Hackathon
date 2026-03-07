@@ -1,8 +1,12 @@
-import { useState } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { Loader2 } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import Navbar from '@/components/layout/Navbar'
 import { DEMO_METRICS } from '@/data/demoData'
+import { useApp } from '@/context/AppContext'
+
+// Map backend scenario_type → frontend card id
+const TYPE_TO_ID = { FLEXIBLE_SLA: 'flexible', STRICT_SLA: 'strict', VEHICLE_SHORTAGE: 'shortage', DEMAND_SURGE: 'surge' }
 
 const SCENARIOS = [
   {
@@ -85,21 +89,84 @@ export default function Scenarios() {
   const [running, setRunning]   = useState(null)
   const [results, setResults]   = useState({})
   const [selected, setSelected] = useState(null)
+  const [liveMetrics, setLiveMetrics] = useState({})
+  const { optimizationResult, runSimulation } = useApp()
+
+  // Auto-populate from optimization pipeline result
+  useEffect(() => {
+    if (optimizationResult?.scenarios?.length) {
+      const newResults = {}
+      const newMetrics = {}
+      optimizationResult.scenarios.forEach(s => {
+        const id = TYPE_TO_ID[s.scenario_type]
+        if (id) {
+          newResults[id] = true
+          newMetrics[id] = {
+            trucks: s.trucks_used,
+            cost: `₹${(s.total_cost / 1000).toFixed(1)}k`,
+            util: `${Math.round(s.avg_utilization)}%`,
+            carbon: `${Math.round(s.carbon_emissions)} kg`,
+            saved: `${Math.round(s.sla_success_rate)}%`,
+          }
+        }
+      })
+      setResults(prev => ({ ...prev, ...newResults }))
+      setLiveMetrics(prev => ({ ...prev, ...newMetrics }))
+      if (!selected && Object.keys(newResults).length) setSelected(Object.keys(newResults)[0])
+    }
+  }, [optimizationResult])
 
   const runScenario = async (id) => {
     setRunning(id)
-    await new Promise(r => setTimeout(r, 1400))
-    setResults(prev => ({ ...prev, [id]: true }))
+    // If we have a plan_id from optimization, call the real simulate API
+    const planId = optimizationResult?.plan?.id
+    if (planId && runSimulation) {
+      const data = await runSimulation({ plan_id: planId })
+      if (data?.scenarios) {
+        const newResults = {}
+        const newMetrics = {}
+        data.scenarios.forEach(s => {
+          const sid = TYPE_TO_ID[s.scenario_type]
+          if (sid) {
+            newResults[sid] = true
+            newMetrics[sid] = {
+              trucks: s.trucks_used,
+              cost: `₹${(s.total_cost / 1000).toFixed(1)}k`,
+              util: `${Math.round(s.avg_utilization)}%`,
+              carbon: `${Math.round(s.carbon_emissions)} kg`,
+              saved: `${Math.round(s.sla_success_rate)}%`,
+            }
+          }
+        })
+        setResults(prev => ({ ...prev, ...newResults }))
+        setLiveMetrics(prev => ({ ...prev, ...newMetrics }))
+      }
+    } else {
+      // Fallback: fake delay for demo mode
+      await new Promise(r => setTimeout(r, 1400))
+      setResults(prev => ({ ...prev, [id]: true }))
+    }
     setRunning(null)
     setSelected(id)
   }
 
   const runAll = async () => {
-    for (const s of SCENARIOS) {
-      await runScenario(s.id)
-      await new Promise(r => setTimeout(r, 200))
+    // If we have a plan, one simulate call returns all 4
+    const planId = optimizationResult?.plan?.id
+    if (planId && runSimulation) {
+      setRunning('all')
+      await runScenario('flexible')
+      setRunning(null)
+    } else {
+      for (const s of SCENARIOS) {
+        await runScenario(s.id)
+        await new Promise(r => setTimeout(r, 200))
+      }
     }
   }
+
+  // Merge live metrics into SCENARIOS for display
+  const getMetrics = (s) => liveMetrics[s.id] || s.metrics
 
   const allDone = SCENARIOS.every(s => results[s.id])
   const sel = SCENARIOS.find(s => s.id === selected)
@@ -400,7 +467,7 @@ export default function Scenarios() {
             }
           </button>
           <span className="scn-toolbar-info">
-            {allDone ? `All 4 scenarios complete — ${SCENARIOS.find(s => s.id === 'shortage')?.metrics.cost} best cost` : `${Object.keys(results).length}/4 complete`}
+            {allDone ? `All 4 scenarios complete` : `${Object.keys(results).length}/4 complete`}
           </span>
         </div>
 
@@ -439,9 +506,9 @@ export default function Scenarios() {
                   {isDone ? (
                     <>
                       <div className="scn-metric-row">
-                        <MetricPill val={s.metrics.trucks + ' trucks'} lbl="Fleet Used" color={s.color} />
-                        <MetricPill val={s.metrics.cost} lbl="Total Cost" color={s.color} />
-                        <MetricPill val={s.metrics.util} lbl="Avg Util" color={s.color} />
+                        <MetricPill val={getMetrics(s).trucks + ' trucks'} lbl="Fleet Used" color={s.color} />
+                        <MetricPill val={getMetrics(s).cost} lbl="Total Cost" color={s.color} />
+                        <MetricPill val={getMetrics(s).util} lbl="Avg Util" color={s.color} />
                       </div>
                       <div className="scn-bars">
                         {s.bars.map(([lbl, pct]) => (
@@ -465,7 +532,7 @@ export default function Scenarios() {
 
                 <div className="scn-card-footer">
                   <span style={{ fontSize: '0.68rem', fontFamily: 'JetBrains Mono', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>
-                    {isDone ? `✓ Saved ${s.metrics.saved}` : isRunning ? 'Running MIP…' : 'Ready'}
+                    {isDone ? `✓ SLA ${getMetrics(s).saved}` : isRunning ? 'Running MIP…' : 'Ready'}
                   </span>
                   <button
                     className="scn-run-btn"
@@ -505,8 +572,7 @@ export default function Scenarios() {
               </thead>
               <tbody>
                 {SCENARIOS.filter(s => results[s.id]).map(s => {
-                  const isBestCost = s.id === 'shortage'
-                  const isBestUtil = s.id === 'shortage'
+                  const m = getMetrics(s)
                   return (
                     <tr key={s.id} style={{ cursor: 'pointer' }} onClick={() => setSelected(s.id)}>
                       <td>
@@ -515,17 +581,15 @@ export default function Scenarios() {
                           <span style={{ fontFamily: 'Syne, sans-serif', fontWeight: 700 }}>{s.label}</span>
                         </div>
                       </td>
-                      <td style={{ fontFamily: 'JetBrains Mono', color: 'var(--text-secondary)' }}>{s.metrics.trucks}</td>
+                      <td style={{ fontFamily: 'JetBrains Mono', color: 'var(--text-secondary)' }}>{m.trucks}</td>
                       <td style={{ fontFamily: 'JetBrains Mono', color: s.color, fontWeight: 700 }}>
-                        {s.metrics.cost}
-                        {isBestCost && <span className="scn-best-badge" style={{ background: `${s.color}18`, color: s.color }}>Best</span>}
+                        {m.cost}
                       </td>
                       <td style={{ fontFamily: 'JetBrains Mono', color: 'var(--text-secondary)' }}>
-                        {s.metrics.util}
-                        {isBestUtil && <span className="scn-best-badge" style={{ background: `${s.color}18`, color: s.color }}>Best</span>}
+                        {m.util}
                       </td>
-                      <td style={{ fontFamily: 'JetBrains Mono', color: 'var(--text-muted)' }}>{s.metrics.carbon}</td>
-                      <td style={{ fontFamily: 'JetBrains Mono', color: s.color }}>{s.metrics.saved}</td>
+                      <td style={{ fontFamily: 'JetBrains Mono', color: 'var(--text-muted)' }}>{m.carbon}</td>
+                      <td style={{ fontFamily: 'JetBrains Mono', color: s.color }}>{m.saved}</td>
                     </tr>
                   )
                 })}
@@ -548,9 +612,9 @@ export default function Scenarios() {
               </svg>
               Lorri
             </div>
-            <p className="footer-desc">AI-powered load consolidation. Fewer trucks, lower costs, less carbon — optimized in seconds using OR-Tools and LangChain.</p>
+            <p className="footer-desc">AI-powered load consolidation. Fewer trucks, lower costs, less carbon — optimized in seconds using OR-Tools and LangGraph.</p>
             <div className="footer-badges">
-              {['OR-Tools','LangChain','FastAPI','React','Globe.gl','Recharts'].map(t => (
+              {['OR-Tools','LangGraph','FastAPI','React','Globe.gl','Recharts'].map(t => (
                 <span key={t} className="footer-badge">{t}</span>
               ))}
             </div>
@@ -563,7 +627,7 @@ export default function Scenarios() {
           </div>
           <div>
             <div className="footer-col-title">Stack</div>
-            {['OR-Tools MIP','LangChain Agents','scikit-learn','Globe.gl','Recharts','SQLite / PG'].map(t => (
+            {['OR-Tools MIP','LangGraph Agents','scikit-learn','Globe.gl','Recharts','SQLite / PG'].map(t => (
               <span key={t} className="footer-link">{t}</span>
             ))}
           </div>

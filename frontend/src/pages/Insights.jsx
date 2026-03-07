@@ -1,9 +1,10 @@
-import { useState } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { Loader2 } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import Navbar from '@/components/layout/Navbar'
 import FoxMascot from '@/components/FoxMascot'
 import { DEMO_PLAN } from '@/data/demoData'
+import { useApp } from '@/context/AppContext'
 
 const AGENTS = [
   {
@@ -77,14 +78,64 @@ export default function Insights() {
   const [revealed, setRevealed]     = useState([])
   const [activeAgent, setActiveAgent] = useState(null)
   const nav = useNavigate()
+  const { optimizationResult } = useApp()
+
+  // Build agent cards with live data from optimization, falling back to hardcoded text
+  const agents = useMemo(() => {
+    const v = optimizationResult?.validation
+    const ins = optimizationResult?.insights
+    const rel = optimizationResult?.relaxation
+    const scn = optimizationResult?.scenario_analysis
+
+    return AGENTS.map(a => {
+      if (a.id === 'validator' && v) {
+        const total = v.summary_counts?.total_shipments ?? '?'
+        const errors = v.summary_counts?.error_count ?? 0
+        return { ...a,
+          insight: v.llm_summary || (v.is_valid ? `All ${total} shipments passed constraint validation. No errors found.` : `${errors} validation error(s) detected.`),
+          metric: { val: `${total - errors}/${total}`, lbl: 'Valid' },
+        }
+      }
+      if (a.id === 'insight' && ins) {
+        const costPct = ins.plan_summary?.cost_saving_pct
+        return { ...a,
+          insight: ins.llm_narrative || ins.recommendations?.[0]?.message || a.insight,
+          metric: costPct != null ? { val: `${costPct}%`, lbl: 'Cost Saved' } : a.metric,
+        }
+      }
+      if (a.id === 'relaxation' && rel) {
+        const sugCount = rel.summary_counts?.total_suggestions ?? rel.suggestions?.length ?? 0
+        return { ...a,
+          insight: rel.llm_summary || rel.suggestions?.[0]?.message || (rel.is_feasible ? 'Plan is fully feasible — no relaxations needed.' : a.insight),
+          metric: rel.is_feasible ? { val: '✓', lbl: 'Feasible' } : { val: String(sugCount), lbl: 'Suggestions' },
+        }
+      }
+      if (a.id === 'recommender' && scn) {
+        const balanced = scn.recommendations?.balanced
+        return { ...a,
+          insight: scn.llm_narrative || balanced?.reason || a.insight,
+          metric: balanced?.winner ? { val: balanced.winner.replace('_', ' '), lbl: 'Recommended' } : a.metric,
+        }
+      }
+      return a
+    })
+  }, [optimizationResult])
+
+  // Auto-reveal agents if optimization data already exists
+  useEffect(() => {
+    if (optimizationResult && status === 'idle') {
+      setRevealed(agents.map(a => a.id))
+      setStatus('done')
+    }
+  }, [optimizationResult])
 
   const runPipeline = async () => {
     setStatus('running')
     setRevealed([])
-    for (let i = 0; i < AGENTS.length; i++) {
-      setActiveAgent(AGENTS[i].id)
+    for (let i = 0; i < agents.length; i++) {
+      setActiveAgent(agents[i].id)
       await new Promise(r => setTimeout(r, 900 + i * 150))
-      setRevealed(prev => [...prev, AGENTS[i].id])
+      setRevealed(prev => [...prev, agents[i].id])
     }
     setActiveAgent(null)
     setStatus('done')
@@ -473,7 +524,7 @@ export default function Insights() {
           <div>
             <div className="ins-hero-tag">
               <svg viewBox="0 0 24 24" width="10" height="10" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="8" r="5"/><path d="M9 13v2a3 3 0 0 0 6 0v-2"/></svg>
-              LangChain · 4-Agent Pipeline
+              LangGraph · 4-Agent Loop
             </div>
             <h1>
               <div className="blur-line">
@@ -488,7 +539,7 @@ export default function Insights() {
               </div>
             </h1>
             <p className="ins-hero-sub">
-              A sequential LangChain pipeline validates your batch, explains the solver's output, suggests constraint relaxations, and recommends the best scenario — all in plain language.
+              An agentic LangGraph loop validates your batch, explains the solver's output, suggests constraint relaxations, and recommends the best scenario — all in plain language.
             </p>
             <div className="ins-pipeline-badge">
               {['Validator', 'Insight', 'Relaxation', 'Recommender'].map((step, i, arr) => (
@@ -511,7 +562,7 @@ export default function Insights() {
           {/* ── LEFT: Control ── */}
           <div className="ins-control-card">
             <div className="ins-ctrl-header">
-              <span className="ins-ctrl-header-label">/ pipeline · langchain</span>
+              <span className="ins-ctrl-header-label">/ pipeline · langgraph</span>
               <div className="ins-status-dot" />
             </div>
             <div className="ins-ctrl-body">
@@ -525,7 +576,7 @@ export default function Insights() {
                 Agent Pipeline
               </p>
               <div className="ins-agent-list">
-                {AGENTS.map(agent => {
+                {agents.map(agent => {
                   const isDone = revealed.includes(agent.id)
                   const isActive = activeAgent === agent.id
                   return (
@@ -568,7 +619,7 @@ export default function Insights() {
 
             {revealed.length > 0 ? (
               revealed.map((id, idx) => {
-                const agent = AGENTS.find(a => a.id === id)
+                const agent = agents.find(a => a.id === id)
                 return (
                   <div
                     key={id}
@@ -603,10 +654,10 @@ export default function Insights() {
                   <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="8" r="5"/><path d="M9 13v2a3 3 0 0 0 6 0v-2"/></svg>
                 </div>
                 <div className="ins-empty-title">
-                  {status === 'running' ? `Running ${AGENTS.find(a => a.id === activeAgent)?.label ?? 'pipeline'}…` : 'Agent insights appear here'}
+                  {status === 'running' ? `Running ${agents.find(a => a.id === activeAgent)?.label ?? 'pipeline'}…` : 'Agent insights appear here'}
                 </div>
                 <div className="ins-empty-sub">
-                  {status === 'running' ? 'LangChain agents processing batch' : 'Run the pipeline to generate AI insights'}
+                  {status === 'running' ? 'LangGraph agents processing batch' : 'Run the pipeline to generate AI insights'}
                 </div>
               </div>
             )}
@@ -627,9 +678,9 @@ export default function Insights() {
               </svg>
               Lorri
             </div>
-            <p className="footer-desc">AI-powered load consolidation. Fewer trucks, lower costs, less carbon — optimized in seconds using OR-Tools and LangChain.</p>
+            <p className="footer-desc">AI-powered load consolidation. Fewer trucks, lower costs, less carbon — optimized in seconds using OR-Tools and LangGraph.</p>
             <div className="footer-badges">
-              {['OR-Tools','LangChain','FastAPI','React','Globe.gl','Recharts'].map(t => (
+              {['OR-Tools','LangGraph','FastAPI','React','Globe.gl','Recharts'].map(t => (
                 <span key={t} className="footer-badge">{t}</span>
               ))}
             </div>
@@ -642,7 +693,7 @@ export default function Insights() {
           </div>
           <div>
             <div className="footer-col-title">Stack</div>
-            {['OR-Tools MIP','LangChain Agents','scikit-learn','Globe.gl','Recharts','SQLite / PG'].map(t => (
+            {['OR-Tools MIP','LangGraph Agents','scikit-learn','Globe.gl','Recharts','SQLite / PG'].map(t => (
               <span key={t} className="footer-link">{t}</span>
             ))}
           </div>

@@ -1,35 +1,79 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Zap, Loader2 } from 'lucide-react'
 import Navbar from '@/components/layout/Navbar'
 import FoxMascot from '@/components/FoxMascot'
 import ConsolidationPlan from '@/components/ConsolidationPlan'
 import MetricsDashboard from '@/components/MetricsDashboard'
+import { useApp } from '@/context/AppContext'
 import { DEMO_PLAN } from '@/data/demoData'
 
 const SOLVE_STEPS = [
   { label: 'Building compatibility graph', detail: 'Checking weight, volume & time windows' },
   { label: 'Running OR-Tools MIP solver',  detail: 'Binary decision variables assigned' },
-  { label: 'Generating AI insights',        detail: 'LangChain agents analysing output' },
+  { label: 'Generating AI insights',        detail: 'LangGraph agents analysing output' },
 ]
 
 export default function Optimize() {
+  const { shipments, runFullOptimization, optimizerLoading, optimizationResult, transformPlan, seedData, loadShipments } = useApp()
   const [status, setStatus] = useState('idle')
   const [plan,   setPlan]   = useState(null)
   const [activeStep, setActiveStep] = useState(-1)
+  const [apiMetrics, setApiMetrics] = useState(null)
+  const [apiError, setApiError] = useState(null)
+
+  // Load shipments on mount
+  useEffect(() => { loadShipments() }, [])
 
   const runOptimizer = async () => {
     setStatus('running')
     setPlan(null)
+    setApiError(null)
     setActiveStep(0)
-    await new Promise(r => setTimeout(r, 900))
+
+    // If no shipments in DB yet, seed first
+    if (!shipments || shipments.length === 0) {
+      await seedData({ dataset: 'synthetic', shipment_count: 20, vehicle_count: 10 })
+    }
     setActiveStep(1)
-    await new Promise(r => setTimeout(r, 800))
-    setActiveStep(2)
-    await new Promise(r => setTimeout(r, 600))
-    setPlan(DEMO_PLAN)
-    setStatus('done')
+
+    try {
+      const data = await runFullOptimization({ run_simulation: true, run_llm: false })
+      setActiveStep(2)
+
+      if (data?.plan) {
+        const frontendPlan = transformPlan(data)
+        setPlan(frontendPlan || DEMO_PLAN)
+        if (data.metrics) setApiMetrics(data.metrics)
+      } else {
+        // Fallback to demo plan if backend returns empty
+        setPlan(DEMO_PLAN)
+      }
+      setStatus('done')
+    } catch (err) {
+      setApiError(err.message || 'Optimization failed')
+      setPlan(DEMO_PLAN)
+      setStatus('done')
+    }
     setActiveStep(-1)
   }
+
+  // Derive stats for success banner from live data
+  const bannerStats = plan && plan !== DEMO_PLAN ? [
+    [`${plan.total_trucks}`, 'Trucks'],
+    [`${plan.avg_utilization ?? 0}%`, 'Utilization'],
+    [`${plan.cost_saving_pct ?? 0}%`, 'Saved'],
+  ] : [['₹13.5k','Cost Total'],['44%','Saved'],['91%','Max Util']]
+
+  const shipmentList = shipments.length > 0
+    ? shipments.slice(0, 10).map(s => ({ id: s.shipment_id, route: `${s.origin} → ${s.destination}`, wt: `${s.weight} kg` }))
+    : [
+        { id:'S001', route:'Mumbai → Pune',  wt:'850 kg' },
+        { id:'S002', route:'Mumbai → Pune',  wt:'620 kg' },
+        { id:'S003', route:'Pune → Delhi',   wt:'1100 kg' },
+        { id:'S004', route:'Mumbai → Delhi', wt:'450 kg' },
+        { id:'S005', route:'Mumbai → Pune',  wt:'300 kg' },
+        { id:'S006', route:'Pune → Delhi',   wt:'780 kg' },
+      ]
 
   return (
     <div className="lorri-optimize">
@@ -470,7 +514,7 @@ export default function Optimize() {
               Run the binary MIP solver on your shipment batch — get the best truck assignments, cost savings, and AI-powered insights in seconds.
             </p>
             <div className="opt-hero-badge-row">
-              {['6 Shipments', '4 Vehicles', 'Demo Mode', 'LangChain Agents'].map(b => (
+              {['6 Shipments', '4 Vehicles', 'Demo Mode', 'LangGraph Agents'].map(b => (
                 <span key={b} className="opt-badge">{b}</span>
               ))}
             </div>
@@ -503,14 +547,7 @@ export default function Optimize() {
                   Shipment Batch
                 </p>
                 <div className="opt-shipment-list">
-                  {[
-                    { id:'S001', route:'Mumbai → Pune',  wt:'850 kg' },
-                    { id:'S002', route:'Mumbai → Pune',  wt:'620 kg' },
-                    { id:'S003', route:'Pune → Delhi',   wt:'1100 kg' },
-                    { id:'S004', route:'Mumbai → Delhi', wt:'450 kg' },
-                    { id:'S005', route:'Mumbai → Pune',  wt:'300 kg' },
-                    { id:'S006', route:'Pune → Delhi',   wt:'780 kg' },
-                  ].map(s => (
+                  {shipmentList.map(s => (
                     <div key={s.id} className="opt-ship-row">
                       <span className="opt-ship-id">{s.id}</span>
                       <span className="opt-ship-route">{s.route}</span>
@@ -565,10 +602,10 @@ export default function Optimize() {
                 </div>
                 <div>
                   <div className="opt-success-banner-title">✓ Optimization complete</div>
-                  <div className="opt-success-banner-sub">3 trucks assigned · heuristic solver · 2.1s</div>
+                  <div className="opt-success-banner-sub">{plan?.total_trucks ?? 3} trucks assigned · solver · live</div>
                 </div>
                 <div className="opt-success-stats">
-                  {[['₹13.5k','Cost Total'],['44%','Saved'],['91%','Max Util']].map(([n,l]) => (
+                  {bannerStats.map(([n,l]) => (
                     <div key={l} style={{ textAlign: 'center' }}>
                       <div className="opt-success-stat-num">{n}</div>
                       <div className="opt-success-stat-lbl">{l}</div>
@@ -594,7 +631,7 @@ export default function Optimize() {
                     <span className="opt-divider-label">— Performance Metrics</span>
                     <div className="opt-divider-line" />
                   </div>
-                  <MetricsDashboard />
+                  <MetricsDashboard metrics={apiMetrics} />
                 </div>
               </>
             ) : (
@@ -629,9 +666,9 @@ export default function Optimize() {
               </svg>
               Lorri
             </div>
-            <p className="footer-desc">AI-powered load consolidation. Fewer trucks, lower costs, less carbon — optimized in seconds using OR-Tools and LangChain.</p>
+            <p className="footer-desc">AI-powered load consolidation. Fewer trucks, lower costs, less carbon — optimized in seconds using OR-Tools and LangGraph.</p>
             <div className="footer-badges">
-              {['OR-Tools','LangChain','FastAPI','React','Globe.gl','Recharts'].map(t => (
+              {['OR-Tools','LangGraph','FastAPI','React','Globe.gl','Recharts'].map(t => (
                 <span key={t} className="footer-badge">{t}</span>
               ))}
             </div>
@@ -644,7 +681,7 @@ export default function Optimize() {
           </div>
           <div>
             <div className="footer-col-title">Stack</div>
-            {['OR-Tools MIP','LangChain Agents','scikit-learn','Globe.gl','Recharts','SQLite / PG'].map(t => (
+            {['OR-Tools MIP','LangGraph Agents','scikit-learn','Globe.gl','Recharts','SQLite / PG'].map(t => (
               <span key={t} className="footer-link">{t}</span>
             ))}
           </div>
