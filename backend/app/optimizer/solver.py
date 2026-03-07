@@ -121,61 +121,7 @@ def solve_mip(
             ) <= cap_v
         )
 
-    # Constraint 3b: Time window feasibility
-    # Shipments on the same truck must have overlapping time windows.
-    # We enforce this by requiring that for any pair (i,j) on the same truck,
-    # the latest pickup must be before the earliest delivery.
-    # This ensures the truck can pick up both and deliver both within the windows.
-    from datetime import datetime
 
-    def _parse_dt(val):
-        if val is None:
-            return None
-        if isinstance(val, datetime):
-            return val
-        if isinstance(val, str):
-            try:
-                return datetime.fromisoformat(val)
-            except ValueError:
-                return None
-        return None
-
-    # Pre-parse all time windows to epoch seconds for integer constraints
-    pickup_times = []
-    delivery_times = []
-    has_valid_times = True
-
-    for i in range(n_shipments):
-        pt = _parse_dt(shipments[i].get("pickup_time"))
-        dt = _parse_dt(shipments[i].get("delivery_time"))
-        if pt and dt:
-            pickup_times.append(int(pt.timestamp()))
-            delivery_times.append(int(dt.timestamp()))
-        else:
-            has_valid_times = False
-            break
-
-    if has_valid_times:
-        for i in range(n_shipments):
-            for j in range(i + 1, n_shipments):
-                # Apply this simplified overlap rule only for same-lane pairs.
-                # For different lanes, strict interval overlap is overly restrictive
-                # without full route sequencing variables.
-                same_origin = shipments[i].get("origin") == shipments[j].get("origin")
-                same_destination = shipments[i].get("destination") == shipments[j].get("destination")
-                if not (same_origin and same_destination):
-                    continue
-
-                # If both are on the same truck, the latest pickup must be
-                # before the earliest delivery. If this is violated,
-                # they can't share a truck.
-                latest_pickup = max(pickup_times[i], pickup_times[j])
-                earliest_delivery = min(delivery_times[i], delivery_times[j])
-
-                if latest_pickup >= earliest_delivery:
-                    # These two shipments have no time overlap — can't share a truck
-                    for k in range(n_vehicles):
-                        model.Add(x[i, k] + x[j, k] <= 1)
 
     # Constraint 4: Link y[k] to x[i,k] — y[k] = 1 if any shipment assigned to k
     for k in range(n_vehicles):
@@ -183,24 +129,75 @@ def solve_mip(
         model.Add(sum(x[i, k] for i in range(n_shipments)) >= 1).OnlyEnforceIf(y[k])
         model.Add(sum(x[i, k] for i in range(n_shipments)) == 0).OnlyEnforceIf(y[k].Not())
 
-    # Constraint 5: Compatibility — incompatible pairs cannot share a vehicle
-    # For every pair (i, j) that does NOT have an edge in the compatibility graph,
-    # they cannot be on the same truck: x[i,k] + x[j,k] <= 1 for all k
-    if compatibility_graph:
-        shipment_id_to_idx = {
-            shipments[i].get("shipment_id", ""): i
-            for i in range(n_shipments)
-        }
+    # Constraint 5: Compatibility — CONFLICTING pairs cannot share a vehicle.
+    #
+    # IMPORTANT: The compatibility graph represents RECOMMENDED pairings,
+    # not REQUIRED restrictions. The absence of an edge does NOT mean
+    # two shipments can't share a truck — it just means the ML model
+    # didn't flag them as strong consolidation candidates.
+    #
+    # We only add constraints for pairs that are EXPLICITLY incompatible:
+    # - Handling conflicts (hazardous + fragile, etc.)
+    # - Zero time window overlap
+    #
+    # This is a key distinction: the graph is a POSITIVE signal (these
+    # pairs are good candidates), not a NEGATIVE constraint (these pairs
+    # are forbidden). The solver is free to put any non-conflicting
+    # shipments on the same truck if capacity allows.
+    from datetime import datetime as dt_class
 
-        for i in range(n_shipments):
+    def _parse(val):
+        if val is None:
+            return None
+        if isinstance(val, dt_class):
+            return val
+        if isinstance(val, str):
+            try:
+                return dt_class.fromisoformat(val)
+            except ValueError:
+                return None
+        return None
+
+    for i in range(n_shipments):
+        for j in range(i + 1, n_shipments):
             sid_i = shipments[i].get("shipment_id", "")
-            for j in range(i + 1, n_shipments):
-                sid_j = shipments[j].get("shipment_id", "")
+            sid_j = shipments[j].get("shipment_id", "")
 
-                # If there's NO edge, they're incompatible — can't share a truck
-                if not compatibility_graph.has_edge(sid_i, sid_j):
-                    for k in range(n_vehicles):
-                        model.Add(x[i, k] + x[j, k] <= 1)
+            # Check 1: Explicit handling conflicts
+            h_i = shipments[i].get("special_handling") or "none"
+            h_j = shipments[j].get("special_handling") or "none"
+
+            is_handling_conflict = False
+            if h_i != "none" and h_j != "none":
+                conflict_pairs = {
+                    frozenset({"hazardous", "fragile"}),
+                    frozenset({"hazardous", "refrigerated"}),
+                    frozenset({"hazardous", "oversized"}),
+                }
+                if frozenset({h_i, h_j}) in conflict_pairs:
+                    is_handling_conflict = True
+
+            # Check 2: Time window overlap
+            # If time windows don't overlap, they physically can't share a truck
+            has_time_conflict = False
+            pt_i = _parse(shipments[i].get("pickup_time"))
+            dt_i = _parse(shipments[i].get("delivery_time"))
+            pt_j = _parse(shipments[j].get("pickup_time"))
+            dt_j = _parse(shipments[j].get("delivery_time"))
+
+            if all([pt_i, dt_i, pt_j, dt_j]):
+                # Two shipments can share a truck only if their time windows overlap.
+                # Check if the latest pickup is before the earliest delivery.
+                latest_pickup = max(pt_i, pt_j)
+                earliest_delivery = min(dt_i, dt_j)
+                if latest_pickup >= earliest_delivery:
+                    # No overlap — they can't share a truck
+                    has_time_conflict = True
+
+            # Apply constraint if either conflict exists
+            if is_handling_conflict or has_time_conflict:
+                for k in range(n_vehicles):
+                    model.Add(x[i, k] + x[j, k] <= 1)
 
     #  Objective 
     # Minimize: Σ operating_cost_k · y_k − α · Σ (weight_i · x[i,k]) / capacity_k

@@ -375,11 +375,11 @@ class TestCompatibility:
     """Incompatible shipment pairs must not share a truck."""
 
     def test_incompatible_pairs_separated(self):
-        """Shipments without a compatibility edge must be on different trucks."""
+        """Shipments with explicit conflicts (handling) must be on different trucks."""
         shipments = [
             make_shipment("S1", weight=1000, volume=2.0),
-            make_shipment("S2", weight=1000, volume=2.0),
-            make_shipment("S3", weight=1000, volume=2.0),
+            make_shipment("S2", weight=1000, volume=2.0, special_handling="hazardous"),
+            make_shipment("S3", weight=1000, volume=2.0, special_handling="fragile"),
         ]
         vehicles = [
             make_vehicle("V1", capacity_weight=7000, capacity_volume=25),
@@ -387,6 +387,7 @@ class TestCompatibility:
         ]
 
         # Graph: S1-S2 compatible, S1-S3 compatible, S2-S3 NOT compatible
+        # (doesn't matter for this test - explicit conflicts override graph)
         G = nx.Graph()
         G.add_node("S1")
         G.add_node("S2")
@@ -397,11 +398,11 @@ class TestCompatibility:
 
         result = solve_mip(shipments, vehicles, G) if ORTOOLS_AVAILABLE else first_fit_decreasing(shipments, vehicles, G)
 
-        # S2 and S3 must be on different trucks
+        # S2 (hazardous) and S3 (fragile) have a handling conflict - must be separated
         truck_loads = get_truck_loads(result)
         for vid, sids in truck_loads.items():
             assert not ("S2" in sids and "S3" in sids), (
-                f"Incompatible pair S2 and S3 found on same truck {vid}"
+                f"Conflicting pair S2 (hazardous) and S3 (fragile) found on same truck {vid}"
             )
 
     def test_no_graph_allows_all_pairs(self):
