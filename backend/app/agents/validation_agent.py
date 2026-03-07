@@ -292,7 +292,7 @@ def generate_llm_summary(validation_report: Dict) -> Optional[str]:
     try:
         # Initialize Gemini through LangChain
         llm = ChatGoogleGenerativeAI(
-            model="gemini-2.0-flash",
+            model="gemini-2.5-flash",
             google_api_key=google_api_key,
             temperature=0.3,  # Low temperature for factual, consistent summaries
         )

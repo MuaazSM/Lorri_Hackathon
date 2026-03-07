@@ -6,11 +6,13 @@ POST /optimize kicks off:
 2. ML compatibility scoring (TODO)
 3. OR-Tools solver builds the plan (TODO — placeholder for now)
 4. Insight Agent explains the results 
+5. Constraint Relaxation Agent diagnoses infeasibility 
 
 Returns a consistent JSON shape every time:
-- validation: always present (errors, warnings, info, llm_summary)
+- validation: always present
 - plan: present only if validation passed and solver ran
 - insights: present only if a plan was generated
+- relaxation: present only if solver had unassigned shipments or infeasibility
 """
 
 from fastapi import APIRouter, Depends
@@ -21,6 +23,7 @@ from backend.app.models.vehicle import Vehicle
 from backend.app.models.plan import ConsolidationPlan, PlanStatusEnum
 from backend.app.agents.validation_agent import run_validation
 from backend.app.agents.insight_agent import run_insight_analysis
+from backend.app.agents.relaxation_agent import run_relaxation_analysis
 
 router = APIRouter()
 
@@ -32,15 +35,17 @@ def run_optimization(db: Session = Depends(get_db)):
 
     Always returns a 200 with a consistent response shape:
     {
-        "validation": { ... },   // always present
-        "plan": { ... } | null,  // null if validation failed or no data
-        "insights": { ... } | null  // null if no plan was generated
+        "validation": { ... },       // always present
+        "plan": { ... } | null,      // null if validation failed
+        "insights": { ... } | null,  // null if no plan generated
+        "relaxation": { ... } | null // null if plan is fully feasible
     }
 
-    The frontend uses validation.is_valid to decide whether to show
-    the plan view or the validation issues panel. Warnings and info
-    are shown alongside the plan even when optimization succeeds.
-    Insights are rendered in the agent insights panel.
+    The frontend uses these four sections to render different panels:
+    - validation.is_valid → show validation issues or proceed
+    - plan → show plan summary and assignments
+    - insights → show agent insights panel with lane commentary
+    - relaxation → show infeasibility diagnosis and fix suggestions
     """
     # Step 0: Load all shipments and vehicles from the DB
     # Convert ORM objects to plain dicts so the agents
@@ -75,7 +80,7 @@ def run_optimization(db: Session = Depends(get_db)):
         for v in vehicle_rows
     ]
 
-    # Handle empty database — no point running validation on nothing
+    # Handle empty database — no point running anything on nothing
     if not shipments:
         return {
             "validation": {
@@ -90,6 +95,7 @@ def run_optimization(db: Session = Depends(get_db)):
             },
             "plan": None,
             "insights": None,
+            "relaxation": None,
         }
 
     if not vehicles:
@@ -106,18 +112,19 @@ def run_optimization(db: Session = Depends(get_db)):
             },
             "plan": None,
             "insights": None,
+            "relaxation": None,
         }
 
     # Step 1: Run the Validation Agent
     validation_report = run_validation(shipments, vehicles)
 
-    # If validation found critical errors, return the report without running the solver.
-    # The frontend shows the validation panel so the user can fix their data.
+    # If validation found critical errors, stop here.
     if not validation_report["is_valid"]:
         return {
             "validation": validation_report,
             "plan": None,
             "insights": None,
+            "relaxation": None,
         }
 
     # Step 2: TODO — ML compatibility scoring
@@ -125,10 +132,21 @@ def run_optimization(db: Session = Depends(get_db)):
 
     # Step 3: TODO — OR-Tools solver
     # solver_result = solver.optimize(shipments, vehicles, compatibility_graph)
+    # assigned_shipments = solver_result["assigned"]
+    # unassigned_shipments = solver_result["unassigned"]
+    # is_infeasible = solver_result["is_infeasible"]
 
-    # PLACEHOLDER: create a draft plan until solver is wired in
+    # PLACEHOLDER: simulate solver output until real solver is wired in
+    # For now, pretend all shipments are assigned (no infeasibility).
+    # When the solver is integrated, replace these with actual solver output.
+    assigned_shipments = shipments
+    unassigned_shipments = []   # Will be populated by real solver
+    is_infeasible = False       # Will be set by real solver
+    solver_assignments = []     # Will contain vehicle-to-shipment mappings
+
+    # Create the plan in the database
     plan = ConsolidationPlan(
-        status=PlanStatusEnum.DRAFT,
+        status=PlanStatusEnum.DRAFT if is_infeasible else PlanStatusEnum.OPTIMIZED,
         total_trucks=0,
         trips_baseline=len(shipments),
         avg_utilization=0.0,
@@ -139,7 +157,7 @@ def run_optimization(db: Session = Depends(get_db)):
     db.commit()
     db.refresh(plan)
 
-    # Build the plan dict for the response and for the insight agent
+    # Build the plan dict for the response
     plan_dict = {
         "id": plan.id,
         "created_at": plan.created_at.isoformat() if plan.created_at else None,
@@ -154,21 +172,28 @@ def run_optimization(db: Session = Depends(get_db)):
     }
 
     # Step 4: Run the Insight Agent
-    # Even with a draft plan (no assignments), the insight agent will return
-    # a "no assignments to analyze" message. Once the solver is wired in,
-    # this will produce full lane-level insights and risk flags.
     insights = run_insight_analysis(
         plan=plan_dict,
-        assignments=[],  # Empty until solver is wired in
+        assignments=solver_assignments,
         shipments=shipments,
         vehicles=vehicles,
     )
 
-    # Step 5: TODO — Constraint Relaxation Agent (if infeasible)
-    # Step 6: TODO — Scenario Recommendation Agent
+    # Step 5: Run the Relaxation Agent (only if there are issues)
+    # This agent activates when the solver couldn't assign all shipments.
+    # It diagnoses why and suggests the smallest fixes to make it work.
+    relaxation = None
+    if unassigned_shipments or is_infeasible:
+        relaxation = run_relaxation_analysis(
+            all_shipments=shipments,
+            unassigned_shipments=unassigned_shipments,
+            vehicles=vehicles,
+            is_fully_infeasible=is_infeasible,
+        )
 
     return {
         "validation": validation_report,
         "plan": plan_dict,
         "insights": insights,
+        "relaxation": relaxation,
     }
