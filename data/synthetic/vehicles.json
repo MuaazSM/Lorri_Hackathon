@@ -1,72 +1,72 @@
 [
   {
     "vehicle_id": "VH-0001",
-    "vehicle_type": "small_tempo",
-    "capacity_weight": 1912.4,
-    "capacity_volume": 7.4,
-    "operating_cost": 3220.2
+    "vehicle_type": "refrigerated",
+    "capacity_weight": 4503.6,
+    "capacity_volume": 19.1,
+    "operating_cost": 13004.6
   },
   {
     "vehicle_id": "VH-0002",
     "vehicle_type": "medium_truck",
-    "capacity_weight": 6736.8,
-    "capacity_volume": 23.2,
-    "operating_cost": 7711.6
+    "capacity_weight": 7603.5,
+    "capacity_volume": 23.1,
+    "operating_cost": 8381.3
   },
   {
     "vehicle_id": "VH-0003",
-    "vehicle_type": "refrigerated",
-    "capacity_weight": 5086.4,
-    "capacity_volume": 19.2,
-    "operating_cost": 11998.3
+    "vehicle_type": "medium_truck",
+    "capacity_weight": 6665.5,
+    "capacity_volume": 26.6,
+    "operating_cost": 7572.7
   },
   {
     "vehicle_id": "VH-0004",
     "vehicle_type": "medium_truck",
-    "capacity_weight": 7698.1,
-    "capacity_volume": 23.6,
-    "operating_cost": 8376.0
+    "capacity_weight": 6318.1,
+    "capacity_volume": 24.5,
+    "operating_cost": 6802.9
   },
   {
     "vehicle_id": "VH-0005",
     "vehicle_type": "medium_truck",
-    "capacity_weight": 7670.1,
-    "capacity_volume": 25.6,
-    "operating_cost": 8583.6
+    "capacity_weight": 6587.0,
+    "capacity_volume": 24.3,
+    "operating_cost": 7291.9
   },
   {
     "vehicle_id": "VH-0006",
-    "vehicle_type": "medium_truck",
-    "capacity_weight": 6932.9,
-    "capacity_volume": 26.3,
-    "operating_cost": 9105.0
+    "vehicle_type": "refrigerated",
+    "capacity_weight": 4779.1,
+    "capacity_volume": 17.5,
+    "operating_cost": 13107.0
   },
   {
     "vehicle_id": "VH-0007",
-    "vehicle_type": "small_tempo",
-    "capacity_weight": 1912.4,
-    "capacity_volume": 7.5,
-    "operating_cost": 2636.5
+    "vehicle_type": "medium_truck",
+    "capacity_weight": 6390.4,
+    "capacity_volume": 26.7,
+    "operating_cost": 8380.6
   },
   {
     "vehicle_id": "VH-0008",
-    "vehicle_type": "refrigerated",
-    "capacity_weight": 4679.9,
-    "capacity_volume": 17.1,
-    "operating_cost": 12580.7
+    "vehicle_type": "medium_truck",
+    "capacity_weight": 6944.0,
+    "capacity_volume": 22.8,
+    "operating_cost": 8548.3
   },
   {
     "vehicle_id": "VH-0009",
-    "vehicle_type": "medium_truck",
-    "capacity_weight": 6649.0,
-    "capacity_volume": 23.6,
-    "operating_cost": 8338.3
+    "vehicle_type": "small_tempo",
+    "capacity_weight": 1919.9,
+    "capacity_volume": 7.8,
+    "operating_cost": 3081.2
   },
   {
     "vehicle_id": "VH-0010",
-    "vehicle_type": "small_tempo",
-    "capacity_weight": 1972.4,
-    "capacity_volume": 7.3,
-    "operating_cost": 3107.0
+    "vehicle_type": "medium_truck",
+    "capacity_weight": 6883.3,
+    "capacity_volume": 25.4,
+    "operating_cost": 8139.1
   }
 ]
