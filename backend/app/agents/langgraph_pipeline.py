@@ -228,34 +228,41 @@ def compatibility_node(state: AgentState) -> dict:
     """
     REASON PHASE — Score shipment pairs and build compatibility graph.
 
-    Runs the ML compatibility model to predict P(compatible) for every
-    shipment pair, then builds a networkx graph where edges represent
-    feasible consolidation candidates.
+    Thin wrapper around the Compatibility Scoring Tool. The tool handles
+    model lifecycle, pair scoring, and graph construction. This node
+    just calls it and writes the results to AgentState.
 
-    The graph feeds into the guardrail and then the solver.
+    Non-fatal: if the tool fails, the solver can still run without
+    compatibility constraints (just less optimal).
     """
     start = time.time()
 
     try:
-        model = CompatibilityModel()
-        if not model.is_trained:
-            model.train()
+        from backend.app.agents.tools.compatibility_scoring_tool import score_shipment_pairs
 
-        graph_result = model.build_compatibility_graph(
-            state["shipments"], threshold=0.6
+        result = score_shipment_pairs(
+            shipments=state["shipments"],
+            threshold=0.6,
         )
 
         compatibility = {
-            "stats": graph_result["stats"],
-            "edges": graph_result["edges"],
-            "graph_object": graph_result["graph"],  # networkx Graph for solver
+            "stats": result["stats"],
+            "edges": result["edges"],
+            "graph_object": result["graph_object"],
+            "model_info": result["model_info"],
         }
+
         status = "completed"
         error = None
 
     except Exception as e:
-        # ML failure is non-fatal — solver can run without compatibility constraints
-        compatibility = {"stats": {}, "edges": [], "graph_object": None}
+        # ML failure is non-fatal — solver can run without pair constraints
+        compatibility = {
+            "stats": {},
+            "edges": [],
+            "graph_object": None,
+            "model_info": {"status": "failed", "error": str(e)},
+        }
         status = "failed"
         error = str(e)
         print(f"[Compatibility Node] Failed: {e}")
@@ -878,6 +885,7 @@ def run_pipeline(
         clean_compat = {
             "stats": raw_compat.get("stats", {}),
             "edges_sample": raw_compat.get("edges", [])[:20],
+            "model_info": raw_compat.get("model_info", {}),
         }
 
     # Clean up guardrail — remove filtered_edges (large, not needed in response)
