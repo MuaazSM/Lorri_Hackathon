@@ -36,8 +36,9 @@ from backend.app.agents.insight_agent import run_insight_analysis
 from backend.app.agents.relaxation_agent import run_relaxation_analysis
 from backend.app.agents.scenario_agent import run_scenario_analysis
 from backend.app.agents.guardrail import run_guardrail
-from backend.app.ml.compatibility_model import CompatibilityModel
+from backend.app.agents.tools.compatibility_scoring_tool import score_shipment_pairs
 from backend.app.agents.tools.shipment_data_tool import fetch_shipment_data
+from backend.app.agents.tools.optimization_tool import run_optimization
 
 # ---------------------------------------------------------------------------
 # AgentState — the typed state that flows through the entire graph
@@ -229,8 +230,8 @@ def compatibility_node(state: AgentState) -> dict:
     REASON PHASE — Score shipment pairs and build compatibility graph.
 
     Thin wrapper around the Compatibility Scoring Tool. The tool handles
-    model lifecycle, pair scoring, and graph construction. This node
-    just calls it and writes the results to AgentState.
+    model lifecycle, pair scoring, rule-based filtering, and graph
+    construction. This node just calls it and writes results to AgentState.
 
     Non-fatal: if the tool fails, the solver can still run without
     compatibility constraints (just less optimal).
@@ -238,10 +239,9 @@ def compatibility_node(state: AgentState) -> dict:
     start = time.time()
 
     try:
-        from backend.app.agents.tools.compatibility_scoring_tool import score_shipment_pairs
-
         result = score_shipment_pairs(
             shipments=state["shipments"],
+            vehicles=state["vehicles"],
             threshold=0.6,
         )
 
@@ -318,41 +318,66 @@ def solver_node(state: AgentState) -> dict:
     """
     ACT PHASE — Run the OR-Tools solver to build the consolidation plan.
 
-    Takes the compatibility graph (filtered by the guardrail) and
-    produces vehicle-to-shipment assignments that minimize cost
-    while maximizing utilization.
-
-    Currently a placeholder — returns a draft plan. When the real
-    OR solver is built, replace the internals of this function.
+    Thin wrapper around the Optimization Tool. The tool decides whether
+    to use MIP (<=50 shipments) or heuristic (>50 shipments), runs the
+    solver with the compatibility graph as constraints, and returns
+    vehicle-to-shipment assignments.
     """
     start = time.time()
 
-    # --- PLACEHOLDER: real OR-Tools solver goes here ---
-    # The solver should read:
-    #   state["shipments"] — all shipments to assign
-    #   state["vehicles"] — available fleet
-    #   state["compatibility_scores"]["graph_object"] — networkx graph
-    #   state["compatibility_scores"]["edges"] — filtered edges from guardrail
-    #
-    # And return:
-    #   assigned: list of assignment dicts {vehicle_id, shipment_ids, utilization_pct, route_detour_km}
-    #   unassigned: list of shipment dicts the solver couldn't place
-    #   is_infeasible: True if no valid plan exists
+    try:
+        # Extract the compatibility graph from the Reason phase.
+        # If compatibility scoring failed, graph_object will be None
+        # and the solver will treat all pairs as compatible.
+        graph_object = None
+        compat = state.get("compatibility_scores")
+        if compat:
+            graph_object = compat.get("graph_object")
 
-    plan = {
-        "status": "OPTIMIZED",
-        "assigned": [],
-        "unassigned": [],
-        "is_infeasible": False,
-        "total_trucks": 0,
-        "trips_baseline": len(state["shipments"]),
-        "avg_utilization": 0.0,
-        "cost_saving_pct": 0.0,
-        "carbon_saving_pct": 0.0,
-    }
+        result = run_optimization(
+            shipments=state["shipments"],
+            vehicles=state["vehicles"],
+            compatibility_graph=graph_object,
+        )
+
+        # Build the plan dict for AgentState
+        plan = {
+            "status": "INFEASIBLE" if result["is_infeasible"] else "OPTIMIZED",
+            "assigned": result["assigned"],
+            "unassigned": result["unassigned"],
+            "is_infeasible": result["is_infeasible"],
+            "total_trucks": result["plan_metrics"]["total_trucks"],
+            "trips_baseline": result["plan_metrics"]["trips_baseline"],
+            "avg_utilization": result["plan_metrics"]["avg_utilization"],
+            "cost_saving_pct": result["plan_metrics"]["cost_saving_pct"],
+            "carbon_saving_pct": result["plan_metrics"]["carbon_saving_pct"],
+            "solver_used": result.get("solver_used", "UNKNOWN"),
+            "solver_status": result.get("solver_status", "UNKNOWN"),
+        }
+
+        status = "completed"
+        error = None
+
+    except Exception as e:
+        plan = {
+            "status": "FAILED",
+            "assigned": [],
+            "unassigned": state["shipments"],
+            "is_infeasible": True,
+            "total_trucks": 0,
+            "trips_baseline": len(state["shipments"]),
+            "avg_utilization": 0.0,
+            "cost_saving_pct": 0.0,
+            "carbon_saving_pct": 0.0,
+            "solver_used": "NONE",
+            "solver_status": f"Error: {str(e)}",
+        }
+        status = "failed"
+        error = str(e)
+        print(f"[Solver Node] Failed: {e}")
 
     duration = (time.time() - start) * 1000
-    timing = {"step": "OR Solver", "status": "completed", "duration_ms": round(duration, 1), "error": None}
+    timing = {"step": "OR Solver", "status": status, "duration_ms": round(duration, 1), "error": error}
 
     return {
         "consolidation_plan": plan,
