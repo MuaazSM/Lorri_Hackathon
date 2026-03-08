@@ -36,8 +36,12 @@ from backend.app.agents.insight_agent import run_insight_analysis
 from backend.app.agents.relaxation_agent import run_relaxation_analysis
 from backend.app.agents.scenario_agent import run_scenario_analysis
 from backend.app.agents.guardrail import run_guardrail
-from backend.app.ml.compatibility_model import CompatibilityModel
+from backend.app.agents.tools.compatibility_scoring_tool import score_shipment_pairs
+from backend.app.agents.tools.scenario_simulation_tool import run_all_scenarios
 from backend.app.agents.tools.shipment_data_tool import fetch_shipment_data
+from backend.app.agents.tools.optimization_tool import run_optimization
+from backend.app.agents.tools.outcome_logging_tool import log_outcome, trigger_retraining
+from backend.app.optimizer.metrics import compute_full_metrics
 
 # ---------------------------------------------------------------------------
 # AgentState — the typed state that flows through the entire graph
@@ -229,8 +233,8 @@ def compatibility_node(state: AgentState) -> dict:
     REASON PHASE — Score shipment pairs and build compatibility graph.
 
     Thin wrapper around the Compatibility Scoring Tool. The tool handles
-    model lifecycle, pair scoring, and graph construction. This node
-    just calls it and writes the results to AgentState.
+    model lifecycle, pair scoring, rule-based filtering, and graph
+    construction. This node just calls it and writes results to AgentState.
 
     Non-fatal: if the tool fails, the solver can still run without
     compatibility constraints (just less optimal).
@@ -238,10 +242,9 @@ def compatibility_node(state: AgentState) -> dict:
     start = time.time()
 
     try:
-        from backend.app.agents.tools.compatibility_scoring_tool import score_shipment_pairs
-
         result = score_shipment_pairs(
             shipments=state["shipments"],
+            vehicles=state["vehicles"],
             threshold=0.6,
         )
 
@@ -318,41 +321,66 @@ def solver_node(state: AgentState) -> dict:
     """
     ACT PHASE — Run the OR-Tools solver to build the consolidation plan.
 
-    Takes the compatibility graph (filtered by the guardrail) and
-    produces vehicle-to-shipment assignments that minimize cost
-    while maximizing utilization.
-
-    Currently a placeholder — returns a draft plan. When the real
-    OR solver is built, replace the internals of this function.
+    Thin wrapper around the Optimization Tool. The tool decides whether
+    to use MIP (<=50 shipments) or heuristic (>50 shipments), runs the
+    solver with the compatibility graph as constraints, and returns
+    vehicle-to-shipment assignments.
     """
     start = time.time()
 
-    # --- PLACEHOLDER: real OR-Tools solver goes here ---
-    # The solver should read:
-    #   state["shipments"] — all shipments to assign
-    #   state["vehicles"] — available fleet
-    #   state["compatibility_scores"]["graph_object"] — networkx graph
-    #   state["compatibility_scores"]["edges"] — filtered edges from guardrail
-    #
-    # And return:
-    #   assigned: list of assignment dicts {vehicle_id, shipment_ids, utilization_pct, route_detour_km}
-    #   unassigned: list of shipment dicts the solver couldn't place
-    #   is_infeasible: True if no valid plan exists
+    try:
+        # Extract the compatibility graph from the Reason phase.
+        # If compatibility scoring failed, graph_object will be None
+        # and the solver will treat all pairs as compatible.
+        graph_object = None
+        compat = state.get("compatibility_scores")
+        if compat:
+            graph_object = compat.get("graph_object")
 
-    plan = {
-        "status": "OPTIMIZED",
-        "assigned": [],
-        "unassigned": [],
-        "is_infeasible": False,
-        "total_trucks": 0,
-        "trips_baseline": len(state["shipments"]),
-        "avg_utilization": 0.0,
-        "cost_saving_pct": 0.0,
-        "carbon_saving_pct": 0.0,
-    }
+        result = run_optimization(
+            shipments=state["shipments"],
+            vehicles=state["vehicles"],
+            compatibility_graph=graph_object,
+        )
+
+        # Build the plan dict for AgentState
+        plan = {
+            "status": "INFEASIBLE" if result["is_infeasible"] else "OPTIMIZED",
+            "assigned": result["assigned"],
+            "unassigned": result["unassigned"],
+            "is_infeasible": result["is_infeasible"],
+            "total_trucks": result["plan_metrics"]["total_trucks"],
+            "trips_baseline": result["plan_metrics"]["trips_baseline"],
+            "avg_utilization": result["plan_metrics"]["avg_utilization"],
+            "cost_saving_pct": result["plan_metrics"]["cost_saving_pct"],
+            "carbon_saving_pct": result["plan_metrics"]["carbon_saving_pct"],
+            "solver_used": result.get("solver_used", "UNKNOWN"),
+            "solver_status": result.get("solver_status", "UNKNOWN"),
+        }
+
+        status = "completed"
+        error = None
+
+    except Exception as e:
+        plan = {
+            "status": "FAILED",
+            "assigned": [],
+            "unassigned": state["shipments"],
+            "is_infeasible": True,
+            "total_trucks": 0,
+            "trips_baseline": len(state["shipments"]),
+            "avg_utilization": 0.0,
+            "cost_saving_pct": 0.0,
+            "carbon_saving_pct": 0.0,
+            "solver_used": "NONE",
+            "solver_status": f"Error: {str(e)}",
+        }
+        status = "failed"
+        error = str(e)
+        print(f"[Solver Node] Failed: {e}")
 
     duration = (time.time() - start) * 1000
-    timing = {"step": "OR Solver", "status": "completed", "duration_ms": round(duration, 1), "error": None}
+    timing = {"step": "OR Solver", "status": status, "duration_ms": round(duration, 1), "error": error}
 
     return {
         "consolidation_plan": plan,
@@ -394,40 +422,49 @@ def relaxation_node(state: AgentState) -> dict:
 
 def simulation_node(state: AgentState) -> dict:
     """
-    SIMULATION — Run all 4 scenario simulations.
+    SIMULATION — Run all 4 scenario simulations using the actual solver.
 
-    Re-runs the solver with modified constraints for each scenario:
-    - STRICT_SLA: original time windows, no relaxation
-    - FLEXIBLE_SLA: windows expanded ±30 min
-    - VEHICLE_SHORTAGE: only 70% of fleet available
-    - DEMAND_SURGE: 1.5x shipment volume
-
-    Currently placeholder metrics — will use real solver re-runs later.
+    Each scenario modifies the inputs (time windows, fleet size, demand)
+    and re-runs the optimizer to produce real metrics. Results feed
+    into the Scenario Recommendation Agent for comparison.
     """
     start = time.time()
 
     # Check if simulation is enabled in config
     if not state["config"].get("run_simulation", True):
-        timing = {"step": "Simulation Engine", "status": "skipped", "duration_ms": 0, "error": "Skipped by config"}
+        timing = {"step": "Simulation Engine", "status": "skipped", "duration_ms": 0,
+                  "error": "Skipped by config"}
         return {
             "scenario_results": None,
             "step_timings": state["step_timings"] + [timing],
         }
 
-    # --- PLACEHOLDER: real simulation engine goes here ---
-    scenarios = [
-        {"scenario_type": "STRICT_SLA", "trucks_used": 12, "avg_utilization": 72.5,
-         "total_cost": 45000.0, "carbon_emissions": 1200.0, "sla_success_rate": 95.0},
-        {"scenario_type": "FLEXIBLE_SLA", "trucks_used": 9, "avg_utilization": 85.3,
-         "total_cost": 35000.0, "carbon_emissions": 950.0, "sla_success_rate": 88.0},
-        {"scenario_type": "VEHICLE_SHORTAGE", "trucks_used": 7, "avg_utilization": 91.0,
-         "total_cost": 38000.0, "carbon_emissions": 1050.0, "sla_success_rate": 78.0},
-        {"scenario_type": "DEMAND_SURGE", "trucks_used": 15, "avg_utilization": 68.0,
-         "total_cost": 55000.0, "carbon_emissions": 1500.0, "sla_success_rate": 70.0},
-    ]
+    try:
+        # Get the compatibility graph from the Reason phase
+        graph_object = None
+        compat = state.get("compatibility_scores")
+        if compat:
+            graph_object = compat.get("graph_object")
+
+        # Run all 4 scenarios with the actual solver
+        scenarios = run_all_scenarios(
+            shipments=state["shipments"],
+            vehicles=state["vehicles"],
+            compatibility_graph=graph_object,
+        )
+
+        status = "completed"
+        error = None
+
+    except Exception as e:
+        scenarios = []
+        status = "failed"
+        error = str(e)
+        print(f"[Simulation Node] Failed: {e}")
 
     duration = (time.time() - start) * 1000
-    timing = {"step": "Simulation Engine", "status": "completed", "duration_ms": round(duration, 1), "error": None}
+    timing = {"step": "Simulation Engine", "status": status,
+              "duration_ms": round(duration, 1), "error": error}
 
     return {
         "scenario_results": scenarios,
@@ -500,34 +537,104 @@ def scenario_rec_node(state: AgentState) -> dict:
 
 def metrics_node(state: AgentState) -> dict:
     """
-    LEARN PHASE — Compute final before/after metrics.
+    LEARN PHASE — Compute comprehensive before/after metrics.
 
-    Summarizes the entire optimization run into impact metrics:
-    trips saved, cost reduction, carbon savings, utilization improvement.
-    These feed the dashboard's impact summary cards.
+    Uses the full metrics module to calculate distance-based carbon
+    savings, per-truck breakdowns, and fleet usage stats. These feed
+    the dashboard's impact summary cards and comparison charts.
     """
     start = time.time()
 
-    plan = state.get("consolidation_plan", {})
+    try:
+        plan = state.get("consolidation_plan", {})
+        assignments = plan.get("assigned", [])
 
-    metrics = {
-        "trips_baseline": plan.get("trips_baseline", len(state["shipments"])),
-        "trucks_used": plan.get("total_trucks", 0),
-        "trips_saved": plan.get("trips_baseline", 0) - plan.get("total_trucks", 0),
-        "avg_utilization": plan.get("avg_utilization", 0),
-        "cost_saving_pct": plan.get("cost_saving_pct", 0),
-        "carbon_saving_pct": plan.get("carbon_saving_pct", 0),
-        "total_shipments": len(state["shipments"]),
-        "total_vehicles": len(state["vehicles"]),
-        "retries_used": state["retry_count"],
-        "constraint_violations_total": len(state.get("constraint_violations") or []),
-    }
+        metrics = compute_full_metrics(
+            assignments=assignments,
+            shipments=state["shipments"],
+            vehicles=state["vehicles"],
+        )
+
+        status = "completed"
+        error = None
+
+    except Exception as e:
+        metrics = {
+            "error": str(e),
+            "before": {}, "after": {}, "savings": {},
+            "fleet": {}, "per_truck": [],
+        }
+        status = "failed"
+        error = str(e)
+        print(f"[Metrics Node] Failed: {e}")
 
     duration = (time.time() - start) * 1000
-    timing = {"step": "Metrics Engine", "status": "completed", "duration_ms": round(duration, 1), "error": None}
+    timing = {"step": "Metrics Engine", "status": status,
+              "duration_ms": round(duration, 1), "error": error}
 
     return {
         "metrics": metrics,
+        "step_timings": state["step_timings"] + [timing],
+    }
+
+
+def outcome_logging_node(state: AgentState) -> dict:
+    """
+    LEARN PHASE — Log the complete optimization outcome to the database.
+
+    Persists everything: plan, violations, scenarios, metrics, pipeline
+    timings. Also checks if the compatibility model should be retrained
+    based on the number of accumulated outcomes.
+
+    This is the final node before END — it captures the full picture
+    of what happened during this optimization run for historical
+    tracking and model improvement.
+    """
+    start = time.time()
+
+    try:
+        # Build a response-like dict from state for the logger.
+        # The logger expects the same shape as the API response.
+        pipeline_result = {
+            "plan": state.get("consolidation_plan", {}),
+            "metrics": state.get("metrics", {}),
+            "scenarios": state.get("scenario_results"),
+            "guardrail": state.get("guardrail_result", {}),
+            "compatibility": state.get("compatibility_scores", {}),
+            "pipeline_metadata": {
+                "steps": state.get("step_timings", []),
+                "total_duration_ms": sum(
+                    s.get("duration_ms", 0) for s in state.get("step_timings", [])
+                ),
+                "retry_count": state.get("retry_count", 0),
+                "config": state.get("config", {}),
+            },
+        }
+
+        # Log the outcome to the database
+        log_result = log_outcome(pipeline_result)
+
+        # Check if retraining is due
+        if log_result.get("should_retrain", False):
+            retrain_result = trigger_retraining()
+        else:
+            retrain_result = None
+
+        status = "completed"
+        error = None
+
+    except Exception as e:
+        log_result = {"outcome_id": None, "error": str(e)}
+        retrain_result = None
+        status = "failed"
+        error = str(e)
+        print(f"[Outcome Logging Node] Failed: {e}")
+
+    duration = (time.time() - start) * 1000
+    timing = {"step": "Outcome Logger", "status": status,
+              "duration_ms": round(duration, 1), "error": error}
+
+    return {
         "step_timings": state["step_timings"] + [timing],
     }
 
@@ -664,6 +771,7 @@ def build_graph() -> StateGraph:
     graph.add_node("insight_node", insight_node)
     graph.add_node("scenario_rec_node", scenario_rec_node)
     graph.add_node("metrics_node", metrics_node)
+    graph.add_node("outcome_logging_node", outcome_logging_node)
 
     # --- Set the entry point: data loading comes first ---
     graph.set_entry_point("shipment_data_node")
@@ -713,8 +821,11 @@ def build_graph() -> StateGraph:
     # After scenario rec: always proceed to metrics
     graph.add_edge("scenario_rec_node", "metrics_node")
 
-    # After metrics: end
-    graph.add_edge("metrics_node", END)
+    # After metrics: go to outcome logging
+    graph.add_edge("metrics_node", "outcome_logging_node")
+
+    # After outcome logging: end
+    graph.add_edge("outcome_logging_node", END)
 
     compiled = graph.compile()
     return compiled
@@ -908,13 +1019,18 @@ def run_pipeline(
         clean_plan = {
             "status": raw_plan.get("status"),
             "assigned": raw_plan.get("assigned", []),
-            "unassigned": [s.get("shipment_id", "") for s in raw_plan.get("unassigned", [])],
+            "unassigned": [
+                s.get("shipment_id", "") if isinstance(s, dict) else s
+                for s in raw_plan.get("unassigned", [])
+            ],
             "is_infeasible": raw_plan.get("is_infeasible", False),
             "total_trucks": raw_plan.get("total_trucks", 0),
             "trips_baseline": raw_plan.get("trips_baseline", 0),
             "avg_utilization": raw_plan.get("avg_utilization", 0),
             "cost_saving_pct": raw_plan.get("cost_saving_pct", 0),
             "carbon_saving_pct": raw_plan.get("carbon_saving_pct", 0),
+            "solver_used": raw_plan.get("solver_used"),
+            "solver_status": raw_plan.get("solver_status"),
         }
 
     return {

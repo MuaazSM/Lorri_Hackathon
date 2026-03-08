@@ -19,6 +19,7 @@ pair constraints.
 
 from typing import List, Dict, Optional
 from backend.app.ml.compatibility_model import CompatibilityModel
+from backend.app.optimizer.compatibility import filter_compatibility_graph
 
 
 # Module-level model instance — loaded once, reused across requests.
@@ -42,6 +43,7 @@ def _get_model() -> CompatibilityModel:
 
 def score_shipment_pairs(
     shipments: List[Dict],
+    vehicles: List[Dict] = None,
     threshold: float = 0.6,
     force_retrain: bool = False,
 ) -> Dict:
@@ -54,6 +56,8 @@ def score_shipment_pairs(
 
     Args:
         shipments: List of shipment dicts from AgentState
+        vehicles: List of vehicle dicts, needed for capacity-based edge filtering.
+                  If None, capacity filter is skipped.
         threshold: Minimum P(compatible) to create a graph edge.
                    Higher = stricter pairing, fewer edges.
                    Lower = more permissive, more consolidation options.
@@ -105,21 +109,36 @@ def score_shipment_pairs(
             "model_info": model_info,
         }
 
-    # Score all pairs and build the graph
+    # Score all pairs and build the initial graph
     graph_result = model.build_compatibility_graph(shipments, threshold=threshold)
 
-    # Sort edges by score descending so the best candidates are first.
-    # The guardrail and solver process them in this order.
-    sorted_edges = sorted(
-        graph_result["edges"],
-        key=lambda e: e["score"],
-        reverse=True,
+    # Apply hard rule-based filters on top of ML scores.
+    # The ML model catches most incompatibilities but these filters
+    # enforce strict operational rules (detour limits, capacity, etc.)
+    # If vehicles is None, skip capacity filtering by using effectively
+    # unbounded capacities for the filter pass.
+    vehicles_for_filter = vehicles
+    if vehicles_for_filter is None:
+        vehicles_for_filter = [{"capacity_weight": float("inf"), "capacity_volume": float("inf")}]
+
+    filter_result = filter_compatibility_graph(
+        graph=graph_result["graph"],
+        shipments=shipments,
+        vehicles=vehicles_for_filter,
     )
 
+    # Merge stats from ML scoring and filtering
+    combined_stats = {
+        **graph_result["stats"],
+        "edges_after_filter": filter_result["surviving_edge_count"],
+        "edges_removed_by_filter": sum(filter_result["removed_counts"].values()),
+        "filter_removal_reasons": filter_result["removed_counts"],
+    }
+
     return {
-        "stats": graph_result["stats"],
-        "edges": sorted_edges,
-        "graph_object": graph_result["graph"],
+        "stats": combined_stats,
+        "edges": filter_result["edges"],
+        "graph_object": filter_result["graph"],
         "model_info": model_info,
     }
 
