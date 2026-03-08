@@ -17,7 +17,13 @@ load_dotenv()
 class Settings:
     # Database URL — defaults to a local SQLite file for development.
     # In production, this gets overridden via environment variable to a PostgreSQL URI.
-    DATABASE_URL: str = os.getenv("DATABASE_URL", "sqlite:///./dev.db")
+    # Render provides postgres:// but SQLAlchemy 2.x requires postgresql://.
+    _raw_db_url: str = os.getenv("DATABASE_URL", "sqlite:///./dev.db")
+    DATABASE_URL: str = (
+        _raw_db_url.replace("postgres://", "postgresql://", 1)
+        if _raw_db_url.startswith("postgres://")
+        else _raw_db_url
+    )
 
     # OpenAI key used by all four LangChain agents.
     # Left empty by default so the app can still start without it (for DB/OR work).

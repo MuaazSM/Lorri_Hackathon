@@ -1,5 +1,5 @@
 # 🚛 Lorri AI
-## Taqneeq CyberCypher R2 — Problem Statement 5: AI Load Consolidation Optimization Engine
+## Logistics Lorri Hackathon — Problem Statement 5: AI Load Consolidation Optimization Engine
 ### Agentic Logistics Control Tower · Built for LogisticsNow
 
 **An autonomous, multi-agent freight consolidation intelligence platform that combines Operations Research, Machine Learning, and Agentic AI to revolutionize how India moves freight.**
@@ -11,7 +11,7 @@
 [![LangGraph](https://img.shields.io/badge/LangGraph-1.0-FF6B35?style=for-the-badge)](https://langchain-ai.github.io/langgraph/)
 [![scikit-learn](https://img.shields.io/badge/scikit--learn-ML-F7931E?style=for-the-badge&logo=scikit-learn&logoColor=white)](https://scikit-learn.org)
 
-**Team Jugaadus** · Built for Hackathon
+**The Jugaadus** · Built for Hackathon
 
 [Live Demo](#live-demo) · [Architecture](#system-architecture) · [Quick Start](#quick-start) · [API Docs](#api-endpoints) · [Benchmarks](#benchmark-results)
 
@@ -546,7 +546,7 @@ docker-compose up --build
 
 ---
 
-## 👥 Team Jugaadus
+## 👥 The Jugaadus
 
 | Member | Role | Responsibilities |
 |---|---|---|
@@ -565,6 +565,6 @@ Built for hackathon demonstration purposes.
 
 **Lorri AI** — The freight doesn't just move. It thinks.
 
-*Built for LogisticsNow Taqneeq CyberCypher R2 · Problem Statement 5*
+*Built for Logistics Lorri Hackathon · Problem Statement 5*
 
-*Built with ❤️ by Team Jugaadus*
+*Built with ❤️ by The Jugaadus*

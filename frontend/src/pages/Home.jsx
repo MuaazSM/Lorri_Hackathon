@@ -96,6 +96,7 @@ function homeHexToRgb(hex) {
 
 function HomeGlobeMap() {
   const containerRef = useRef(null)
+  const globeRef = useRef(null)
   useEffect(() => {
     if (!containerRef.current) return
     let cancelled = false
@@ -128,9 +129,19 @@ function HomeGlobeMap() {
       g.controls().autoRotate = true
       g.controls().autoRotateSpeed = 0.5
       g.controls().enableZoom = false
+      globeRef.current = g
     }).catch(()=>{})
     }, 800)
-    return () => { cancelled = true; clearTimeout(timer) }
+    return () => {
+      cancelled = true
+      clearTimeout(timer)
+      // Clean up WebGL context to prevent memory leaks
+      if (globeRef.current) {
+        globeRef.current._destructor?.()
+        globeRef.current = null
+      }
+      if (containerRef.current) containerRef.current.innerHTML = ''
+    }
   }, []) // empty — init once, never re-mount
   return <div ref={containerRef} style={{ width:'100%', height:'220px', background:'#060609', borderRadius:10 }} />
 }

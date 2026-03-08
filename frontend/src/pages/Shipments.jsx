@@ -129,7 +129,16 @@ function GlobeMap({ filter }) {
       globeRef.current = g
     }).catch(() => {})
     }, 800)
-    return () => { cancelled = true; clearTimeout(timer) }
+    return () => {
+      cancelled = true
+      clearTimeout(timer)
+      // Clean up WebGL context to prevent memory leaks
+      if (globeRef.current) {
+        globeRef.current._destructor?.()
+        globeRef.current = null
+      }
+      if (containerRef.current) containerRef.current.innerHTML = ''
+    }
   }, []) // ← empty — globe created once, never torn down on filter change
 
   // ── Update arcs data only when filter changes (no scene rebuild) ──

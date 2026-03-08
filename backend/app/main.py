@@ -9,6 +9,8 @@ Run with:
     uvicorn backend.app.main:app --reload
 """
 
+import os
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from backend.app.db.base import Base
@@ -29,10 +31,13 @@ app = FastAPI(
 
 # CORS middleware — allows the React frontend (running on a different port)
 # to call our API without getting blocked by the browser.
-# In production, replace ["*"] with the actual frontend domain.
+_allowed_origins = os.getenv(
+    "ALLOWED_ORIGINS",
+    "http://localhost:3000,http://127.0.0.1:3000",
+).split(",")
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=_allowed_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

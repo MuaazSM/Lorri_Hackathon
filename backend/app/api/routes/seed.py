@@ -15,7 +15,9 @@ Query params:
 - clear: wipe existing data first (default true)
 """
 
-from fastapi import APIRouter, Depends, Query
+import os
+
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from backend.app.db.session import get_db
 from backend.app.models.shipment import Shipment
@@ -30,8 +32,15 @@ from typing import Optional
 router = APIRouter()
 
 
+def _check_not_production():
+    """Block seed endpoint in production to prevent accidental data wipes."""
+    if os.getenv("ENV") == "production":
+        raise HTTPException(status_code=403, detail="Seed endpoint disabled in production")
+
+
 @router.post("/seed")
 def seed_data(
+    _guard=Depends(_check_not_production),
     dataset: str = Query("synthetic", description="Data source: 'synthetic', 'solomon_c101', or 'solomon_r101'"),
     shipment_count: int = Query(20, ge=1, le=500, description="Number of shipments (synthetic only)"),
     vehicle_count: int = Query(10, ge=1, le=100, description="Number of vehicles (synthetic only)"),

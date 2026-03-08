@@ -27,6 +27,7 @@ carries all data through the pipeline. Nodes only modify the fields
 they own, keeping the state clean and traceable.
 """
 
+import json
 import time
 from typing import TypedDict, List, Dict, Optional, Any, Annotated
 from langgraph.graph import StateGraph, END
@@ -482,7 +483,17 @@ def insight_node(state: AgentState) -> dict:
     start = time.time()
 
     plan = state.get("consolidation_plan", {})
-    assignments = plan.get("assigned", [])
+    raw_assignments = plan.get("assigned", [])
+
+    # The insight agent expects shipment_ids as JSON strings,
+    # but the solver produces them as native lists. Convert here.
+    assignments = []
+    for a in raw_assignments:
+        a_copy = dict(a)
+        sids = a_copy.get("shipment_ids", [])
+        if isinstance(sids, list):
+            a_copy["shipment_ids"] = json.dumps(sids)
+        assignments.append(a_copy)
 
     insights = run_insight_analysis(
         plan=plan,

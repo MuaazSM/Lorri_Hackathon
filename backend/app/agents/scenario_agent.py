@@ -563,6 +563,18 @@ Write in a professional but conversational tone — like a trusted advisor, not 
         return response.content
 
     except Exception as e:
+        # Retry once after 10s on rate-limit (429 / RESOURCE_EXHAUSTED)
+        import time as _time
+        err_str = str(e).lower()
+        if "429" in err_str or "resource_exhausted" in err_str:
+            print(f"[Scenario Agent] Rate limited, retrying in 10s...")
+            _time.sleep(10)
+            try:
+                response = llm.invoke([HumanMessage(content=prompt)])
+                return response.content
+            except Exception as retry_err:
+                print(f"[Scenario Agent] Retry also failed: {retry_err}")
+                return None
         print(f"[Scenario Agent] LLM narrative generation failed: {e}")
         return None
 
