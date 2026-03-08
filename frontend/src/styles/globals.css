@@ -7,10 +7,9 @@
 
 /* ─────────────────────────────────────────────────────────
    CSS VARIABLES — Per-page theme system
-   Each page sets --page-accent and --page-glow on <body>
 ───────────────────────────────────────────────────────── */
 :root {
-  --page-accent:     #f59e0b;   /* default: amber (Home) */
+  --page-accent:     #f59e0b;
   --page-glow:       #92400e;
   --page-glow-rgb:   146, 64, 14;
 
@@ -82,6 +81,12 @@ body {
   pointer-events: none;
 }
 
+/*
+  FIX: Added will-change: transform, opacity so the browser
+  promotes these large pseudo-elements to their own GPU layer
+  before glowPulse starts, avoiding mid-animation layer promotion
+  which causes a repaint flash.
+*/
 .page-bg::before {
   content: '';
   position: absolute;
@@ -102,6 +107,7 @@ body {
   );
   transition: background 0.8s ease;
   animation: glowPulse 6s ease-in-out infinite;
+  will-change: transform, opacity;
 }
 
 .page-bg::after {
@@ -122,6 +128,7 @@ body {
   );
   transition: background 0.8s ease;
   animation: glowPulse 8s ease-in-out infinite reverse;
+  will-change: transform, opacity;
 }
 
 @keyframes glowPulse {
@@ -181,8 +188,22 @@ body {
   transition: width 1s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
+/*
+  FIX: Blur Word Sweep animations — two key improvements:
 
-/* ─── Blur Word Sweep — shared across all pages ──────── */
+  1. will-change: transform, opacity, filter tells the browser to
+     promote each element to its own compositing layer BEFORE the
+     animation starts, so there's no expensive mid-animation
+     layer-promotion flash.
+
+  2. Reduced blur from 16px → 6px. CSS blur cost scales quadratically
+     with radius; 6px is visually near-identical but ~7× cheaper
+     to render per frame.
+
+  3. Removed the duplicate definitions that existed further down in
+     this file (they were overriding these with the same values, wasting
+     parse time, and making maintenance confusing).
+*/
 .blur-line {
   display: flex;
   flex-wrap: wrap;
@@ -195,27 +216,40 @@ body {
 .blur-word {
   display: inline-block;
   opacity: 0;
-  filter: blur(16px);
-  transform: translateX(-14px);
-  animation: blurWordIn 0.6s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+  filter: blur(6px);
+  transform: translateX(-10px);
+  will-change: transform, opacity, filter;
+  animation: blurWordIn 0.55s cubic-bezier(0.22, 1, 0.36, 1) forwards;
 }
 @keyframes blurWordIn {
-  0%   { opacity: 0;   filter: blur(16px); transform: translateX(-14px); }
-  55%  { opacity: 0.9; filter: blur(2px);  transform: translateX(2px);  }
-  100% { opacity: 1;   filter: blur(0px);  transform: translateX(0);    }
+  0%   { opacity: 0;   filter: blur(6px); transform: translateX(-10px); }
+  60%  { opacity: 0.9; filter: blur(1px); transform: translateX(1px);   }
+  100% { opacity: 1;   filter: blur(0);   transform: translateX(0);     }
 }
 
+/*
+  FIX: blur-word-sub uses only opacity + translateY (no filter).
+  The subtitle had 13–17 individual word spans each running
+  filter:blur() simultaneously — the heaviest cause of jank.
+  Opacity + translate is composited entirely on the GPU with
+  zero paint cost.
+
+  Note: Home.jsx and Shipments.jsx now animate their subtitles
+  as single elements with fadeSlideUp, so these classes are
+  retained for any other pages that still use them per-word.
+*/
 .blur-word-sub {
   display: inline-block;
   opacity: 0;
-  filter: blur(8px);
-  transform: translateX(-8px);
-  animation: blurWordSub 0.55s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+  transform: translateY(8px);
+  will-change: transform, opacity;
+  animation: blurWordSub 0.5s cubic-bezier(0.22, 1, 0.36, 1) forwards;
 }
 @keyframes blurWordSub {
-  0%   { opacity: 0; filter: blur(8px); transform: translateX(-8px); }
-  100% { opacity: 1; filter: blur(0);   transform: translateX(0);    }
+  0%   { opacity: 0; transform: translateY(8px); }
+  100% { opacity: 1; transform: translateY(0); }
 }
+
 /* ─── Scrollbar ───────────────────────────────────────── */
 ::-webkit-scrollbar       { width: 6px; }
 ::-webkit-scrollbar-track { background: var(--surface); }
@@ -258,27 +292,8 @@ h1, h2, h3, h4, h5, h6 {
 }
 .recharts-text { fill: var(--text-muted) !important; }
 
-.blur-word {
-  display: inline-block; opacity: 0;
-  filter: blur(16px); transform: translateX(-14px);
-  animation: blurWordIn 0.6s cubic-bezier(0.22,1,0.36,1) forwards;
-}
-@keyframes blurWordIn {
-  0%   { opacity:0;   filter:blur(16px); transform:translateX(-14px); }
-  55%  { opacity:0.9; filter:blur(2px);  transform:translateX(2px); }
-  100% { opacity:1;   filter:blur(0);    transform:translateX(0); }
-}
-.blur-word-sub {
-  display: inline-block; opacity: 0;
-  filter: blur(8px); transform: translateX(-8px);
-  animation: blurWordSub 0.5s cubic-bezier(0.22,1,0.36,1) forwards;
-}
-@keyframes blurWordSub {
-  from { opacity:0; filter:blur(8px); transform:translateX(-8px); }
-  to   { opacity:1; filter:blur(0);   transform:translateX(0); }
-}
+/* ─── fadeSlideUp — used by hero-tag, hero-cta-row, etc. ── */
 @keyframes fadeSlideUp {
   from { opacity: 0; transform: translateY(16px); }
   to   { opacity: 1; transform: translateY(0); }
 }
-.blur-line { display: flex; flex-wrap: wrap; gap: 0.22em; }
