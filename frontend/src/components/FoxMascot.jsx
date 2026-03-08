@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useState, useEffect } from 'react'
 
 const SIZES = {
   sm:  { w: 40,  h: 40  },
@@ -14,10 +14,11 @@ const ANIMATIONS = {
   happy:    'fox-bounce',
 }
 
-export default function FoxMascot({ size = 'md', variant = 'idle', className = '' }) {
+export default function FoxMascot({ size = 'md', variant = 'idle', className = '', spin = false }) {
   const { w, h } = SIZES[size] ?? SIZES.md
   const anim = ANIMATIONS[variant] ?? ANIMATIONS.idle
   const [spinning, setSpinning] = useState(false)
+  useEffect(() => { if (spin) setSpinning(true) }, [spin])
 
   const handleClick = () => {
     if (spinning) return

@@ -1,4 +1,5 @@
 import { useNavigate, useLocation } from 'react-router-dom'
+import { useState, useEffect } from 'react'
 import FoxMascot from '@/components/FoxMascot'
 
 const LINKS = [
@@ -12,6 +13,12 @@ const LINKS = [
 export default function Navbar() {
   const nav = useNavigate()
   const { pathname } = useLocation()
+  const [foxSpin, setFoxSpin] = useState(false)
+  useEffect(() => {
+    setFoxSpin(true)
+    const t = setTimeout(() => setFoxSpin(false), 650)
+    return () => clearTimeout(t)
+  }, [pathname])
 
   return (
     <>
@@ -20,7 +27,7 @@ export default function Navbar() {
           display: flex;
           align-items: center;
           justify-content: space-between;
-          padding: 1.2rem 2.5rem;
+          padding: 0.5rem 2.5rem;
           border-bottom: 1px solid var(--border);
           position: sticky;
           top: 0;
@@ -59,7 +66,7 @@ export default function Navbar() {
         /* ── Each nav button ── */
         .lorri-nav-link {
           position: relative;
-          padding: 0.8rem 1.5rem;
+          padding: 1rem 1.5rem;
           border-radius: 12px;
           font-size: 1rem;
           cursor: pointer;
@@ -120,7 +127,7 @@ export default function Navbar() {
       <nav className="lorri-nav">
         {/* Logo */}
         <div className="lorri-nav-logo" onClick={() => nav('/')}>
-          <FoxMascot size="lg" variant="idle" />
+          <FoxMascot size="lg" variant="idle" spin={foxSpin} />
           Lorri
         </div>
 
