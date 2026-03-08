@@ -1,8 +1,8 @@
 import { useState, useEffect, useRef, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
-import Navbar from '@/components/layout/Navbar'
 import { MapPin } from 'lucide-react'
 import { useApp } from '@/context/AppContext'
+import PageShell from '@/components/layout/PageShell'
 
 /* ─────────────────────────────────────────────
    ✏️ EDIT: Shipment & truck data
@@ -24,11 +24,28 @@ const TRUCKS = [
 
 /* ✏️ EDIT: Stats bar — 4 numbers shown at the top */
 const STATS = [
-  { num: '6',      label: 'Total Shipments', sub: 'this batch'       },
-  { num: '3',      label: 'Trucks Assigned', sub: 'MIP solution'     },
-  { num: '4,100kg',label: 'Total Weight',    sub: 'all lanes'        },
-  { num: '76%',    label: 'Avg Utilization', sub: 'across fleet'     },
+  { label: 'Total Shipments', raw: 6,    suffix: '',    prefix: '' },
+  { label: 'Trucks Assigned', raw: 3,    suffix: '',    prefix: '' },
+  { label: 'Total Weight',    raw: 4100, suffix: 'kg',  prefix: '' },
+  { label: 'Avg Utilization', raw: 76,   suffix: '%',   prefix: '' },
 ]
+
+function useCounter(target, duration = 1800, start = false) {
+  const [val, setVal] = useState(0)
+  useEffect(() => {
+    if (!start) return
+    let startTime = null
+    const step = (ts) => {
+      if (!startTime) startTime = ts
+      const p = Math.min((ts - startTime) / duration, 1)
+      const ease = 1 - Math.pow(1 - p, 3)
+      setVal(Math.floor(ease * target))
+      if (p < 1) requestAnimationFrame(step)
+    }
+    requestAnimationFrame(step)
+  }, [start, target, duration])
+  return val
+}
 
 /* ✏️ EDIT: Lane filter pills */
 const LANES = ['All', 'Mumbai → Pune', 'Pune → Delhi', 'Mumbai → Delhi']
@@ -132,7 +149,22 @@ export default function Shipments() {
   const [filter,   setFilter]   = useState('All')
   const [selected, setSelected] = useState(null)
   const { shipments: apiShipments, optimizationResult } = useApp()
+  const statsRef = useRef(null)
+  const [statsVisible, setStatsVisible] = useState(false)
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      const obs = new IntersectionObserver(([e]) => { if (e.isIntersecting) setStatsVisible(true) }, { threshold: 0.3 })
+      if (statsRef.current) obs.observe(statsRef.current)
+    }, 300)
+    return () => clearTimeout(timer)
+  }, [])
+  const c0 = useCounter(STATS[0].raw, 1400, statsVisible)
+  const c1 = useCounter(STATS[1].raw, 1600, statsVisible)
+  const c2 = useCounter(STATS[2].raw, 1800, statsVisible)
+  const c3 = useCounter(STATS[3].raw, 1500, statsVisible)
+  const counters = [c0, c1, c2, c3]
 
+  
   // Map API shipments + optimization assignments to the page's expected shape
   const liveData = useMemo(() => {
     if (!apiShipments?.length) return null
@@ -211,178 +243,8 @@ export default function Shipments() {
   const selTruck    = selShipment ? truckList.find(t => t.id === selShipment.truck) : null
 
   return (
-    <div className="lorri-page">
-      <style>{`
-        /* ─── Base (same as Home) ─── */
-        .lorri-page {
-          min-height: 100vh;
-          display: flex;
-          flex-direction: column;
-          position: relative;
-          overflow-x: clip;
-        }
-
-        /* ─── Dot grid texture (identical to Home) ─── */
-        .lorri-page::before {
-          content: '';
-          position: fixed;
-          inset: 0;
-          z-index: 0;
-          background-image: radial-gradient(circle, rgba(var(--page-glow-rgb), 0.18) 1px, transparent 1px);
-          background-size: 32px 32px;
-          pointer-events: none;
-          mask-image: radial-gradient(ellipse 80% 80% at 50% 50%, black 30%, transparent 100%);
-        }
-
-        /* ─── Hero (identical classes to Home) ─── */
-        .hero-wrap {
-          min-height: 55vh;
-          display: flex;
-          flex-direction: column;
-          align-items: center;
-          justify-content: center;
-          text-align: center;
-          padding: 8rem 2rem 5rem;
-          position: relative;
-          z-index: 1;
-        }
-        .hero-tag {
-          display: inline-flex;
-          align-items: center;
-          gap: 6px;
-          padding: 5px 14px;
-          border-radius: 9999px;
-          border: 1px solid rgba(var(--page-glow-rgb), 0.45);
-          background: rgba(var(--page-glow-rgb), 0.1);
-          font-size: 0.7rem;
-          font-family: 'JetBrains Mono', monospace;
-          color: var(--page-accent);
-          letter-spacing: 0.12em;
-          text-transform: uppercase;
-          margin-bottom: 2.2rem;
-          cursor: default;
-          transition: all 0.3s ease;
-          opacity: 0;
-          animation: fadeSlideUp 0.5s ease 0.1s forwards;
-        }
-        .hero-tag:hover {
-          background: rgba(var(--page-glow-rgb), 0.28);
-          border-color: var(--page-accent);
-          box-shadow: 0 0 20px rgba(var(--page-glow-rgb), 0.45), 0 0 50px rgba(var(--page-glow-rgb), 0.15);
-          transform: scale(1.05);
-        }
-        .hero-h1 {
-          font-family: 'Syne', sans-serif;
-          font-size: clamp(2.8rem, 5.5vw, 5.2rem);
-          font-weight: 800;
-          line-height: 1.02;
-          letter-spacing: -0.03em;
-          margin-bottom: 1.4rem;
-        }
-        .hero-sub {
-          font-size: 1.05rem;
-          color: var(--text-secondary);
-          max-width: 520px;
-          line-height: 1.75;
-          margin-bottom: 2.8rem;
-        }
-
-        /* ─── Marquee (identical to Home) ─── */
-        .marquee-wrap {
-          overflow: hidden;
-          border-top: 1px solid var(--border);
-          border-bottom: 1px solid var(--border);
-          padding: 0.9rem 0;
-          position: relative;
-          z-index: 1;
-        }
-        .marquee-track {
-          display: flex;
-          gap: 0;
-          animation: marquee 22s linear infinite;
-          width: max-content;
-        }
-        .marquee-item {
-          font-family: 'Syne', sans-serif;
-          font-size: 0.75rem;
-          font-weight: 600;
-          color: var(--text-muted);
-          white-space: nowrap;
-          letter-spacing: 0.14em;
-          text-transform: uppercase;
-          padding: 0 2rem;
-        }
-        .marquee-dot { color: var(--page-accent); padding: 0 0.2rem; }
-        @keyframes marquee {
-          from { transform: translateX(0); }
-          to   { transform: translateX(-50%); }
-        }
-
-        /* ─── Stats grid (identical to Home) ─── */
-        .stats-grid {
-          display: grid;
-          grid-template-columns: repeat(4, 1fr);
-          border-bottom: 1px solid var(--border);
-          position: relative;
-          z-index: 1;
-        }
-        .stat-cell {
-          padding: 2.5rem 3rem;
-          border-right: 1px solid var(--border);
-          position: relative;
-          overflow: hidden;
-          transition: background 0.3s;
-        }
-        .stat-cell:last-child { border-right: none; }
-        .stat-cell:hover { background: rgba(var(--page-glow-rgb), 0.06); }
-        .stat-cell::before {
-          content: '';
-          position: absolute;
-          bottom: 0; left: 0; right: 0;
-          height: 2px;
-          background: linear-gradient(90deg, transparent, var(--page-accent), transparent);
-          transform: scaleX(0);
-          transition: transform 0.4s ease;
-        }
-        .stat-cell:hover::before { transform: scaleX(1); }
-        .stat-num {
-          font-family: 'Syne', sans-serif;
-          font-size: 3rem;
-          font-weight: 800;
-          color: var(--page-accent);
-          line-height: 1;
-          margin-bottom: 0.4rem;
-          letter-spacing: -0.02em;
-        }
-        .stat-label {
-          font-size: 0.8rem;
-          color: var(--text-secondary);
-          margin-bottom: 2px;
-          font-weight: 500;
-        }
-        .stat-sub {
-          font-size: 0.68rem;
-          color: var(--text-muted);
-          font-family: 'JetBrains Mono', monospace;
-        }
-
-        /* ─── Section divider (identical to Home) ─── */
-        .section-divider {
-          display: flex;
-          align-items: center;
-          gap: 1rem;
-          padding: 3.5rem 3rem 2rem;
-        }
-        .section-divider-label {
-          font-size: 0.68rem;
-          font-family: 'JetBrains Mono', monospace;
-          color: var(--text-muted);
-          text-transform: uppercase;
-          letter-spacing: 0.14em;
-          white-space: nowrap;
-        }
-        .section-divider-line { flex: 1; height: 1px; background: var(--border); }
-
+    <PageShell>
+    <style>{`
         /* ─── Main content area ─── */
         .page-body {
           position: relative;
@@ -522,35 +384,7 @@ export default function Shipments() {
           letter-spacing: 0.06em;
         }
 
-        /* ─── Footer (identical to Home) ─── */
-        .lorri-footer {
-          border-top: 1px solid var(--border);
-          position: relative;
-          z-index: 1;
-        }
-        .footer-grid {
-          padding: 3.5rem 3rem 2rem;
-          display: grid;
-          grid-template-columns: 2fr 1fr 1fr 1fr;
-          gap: 3rem;
-        }
-        .footer-brand {
-          font-family: 'Syne', sans-serif;
-          font-size: 1.15rem;
-          font-weight: 800;
-          color: var(--page-accent);
-          display: flex;
-          align-items: center;
-          gap: 8px;
-          margin-bottom: 0.6rem;
-        }
-        .footer-desc {
-          font-size: 0.82rem;
-          color: var(--text-muted);
-          line-height: 1.7;
-          max-width: 230px;
-          margin-bottom: 1.2rem;
-        }
+        /* ─── Footer badges (Shipments-only) ─── */
         .footer-badges { display: flex; flex-wrap: wrap; gap: 0.4rem; }
         .footer-badge {
           font-size: 0.65rem;
@@ -563,71 +397,9 @@ export default function Shipments() {
           transition: all 0.2s;
         }
         .footer-badge:hover { border-color: var(--page-accent); color: var(--page-accent); }
-        .footer-col-title {
-          font-family: 'Syne', sans-serif;
-          font-size: 0.72rem;
-          font-weight: 700;
-          text-transform: uppercase;
-          letter-spacing: 0.12em;
-          color: var(--text-secondary);
-          margin-bottom: 1.1rem;
-        }
-        .footer-link {
-          display: block;
-          font-size: 0.82rem;
-          color: var(--text-muted);
-          margin-bottom: 0.55rem;
-          cursor: pointer;
-          text-decoration: none;
-          transition: all 0.2s ease;
-          width: fit-content;
-        }
-        .footer-link:hover {
-          color: var(--page-accent);
-          transform: translateX(3px);
-          text-shadow: 0 0 10px rgba(var(--page-glow-rgb), 0.5);
-        }
-        .footer-bottom {
-          border-top: 1px solid var(--border);
-          padding: 1.2rem 3rem;
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-        }
-        .footer-bottom-l { font-size: 0.72rem; color: var(--text-muted); font-family: 'JetBrains Mono', monospace; }
-        .footer-bottom-r { display: flex; gap: 1.5rem; }
-        .footer-bottom-link { font-size: 0.72rem; color: var(--text-muted); cursor: pointer; transition: color 0.2s; }
-        .footer-bottom-link:hover { color: var(--page-accent); }
-
-        /* ─── Animations (identical to Home) ─── */
-        @keyframes fadeSlideUp {
-          from { opacity: 0; transform: translateY(18px); }
-          to   { opacity: 1; transform: translateY(0); }
-        }
-        .blur-line { display: flex; flex-wrap: wrap; justify-content: center; gap: 0.22em; }
-        .blur-word {
-          display: inline-block; opacity: 0;
-          filter: blur(16px); transform: translateX(-14px);
-          animation: blurWordIn 0.6s cubic-bezier(0.22,1,0.36,1) forwards;
-        }
-        @keyframes blurWordIn {
-          0%   { opacity:0;   filter:blur(16px); transform:translateX(-14px); }
-          55%  { opacity:0.9; filter:blur(2px);  transform:translateX(2px);  }
-          100% { opacity:1;   filter:blur(0);    transform:translateX(0);    }
-        }
-        .blur-word-sub {
-          display: inline-block; opacity: 0;
-          filter: blur(8px); transform: translateX(-8px);
-          animation: blurWordSub 0.5s cubic-bezier(0.22,1,0.36,1) forwards;
-        }
-        @keyframes blurWordSub {
-          from { opacity:0; filter:blur(8px); transform:translateX(-8px); }
-          to   { opacity:1; filter:blur(0);   transform:translateX(0);    }
-        }
       `}</style>
 
-      {/* ── Navbar (identical to Home) ── */}
-      <Navbar />
+      
 
       {/* ════ HERO ════ */}
       {/* ✏️ EDIT: hero-tag text, h1 words, subtitle words */}
@@ -654,7 +426,7 @@ export default function Shipments() {
 
           <p className="hero-sub">
             {/* ✏️ EDIT: change subtitle words */}
-            {['6 shipments', 'across', '3 lanes', '—', 'visualised', 'on', 'an', 'interactive', '3D', 'globe', 'with', 'live', 'arc', 'routes.'].map((w, i) => (
+            {['6 shipments', 'across', '3 lanes', 'visualised', 'on', 'an', 'interactive', '3D', 'globe', 'with', 'live', 'arc', 'routes.'].map((w, i) => (
               <span key={i} className="blur-word-sub" style={{ animationDelay:`${0.5 + i*0.04}s`, marginRight:'0.3em' }}>{w}</span>
             ))}
           </p>
@@ -679,12 +451,12 @@ export default function Shipments() {
 
       {/* ════ STATS ════ */}
       {/* ✏️ EDIT: stat values are in the STATS array at the top of the file */}
-      <div className="stats-grid">
-        {statList.map(({ num, label, sub }) => (
+      <div className="stats-grid" ref={statsRef} style={{ opacity: statsVisible ? 1 : 0, transform: statsVisible ? 'translateY(0)' : 'translateY(28px)', transition: 'opacity 0.7s cubic-bezier(0.22,1,0.36,1), transform 0.7s cubic-bezier(0.22,1,0.36,1)' }}>
+        {STATS.map(({ label, suffix, prefix }, i) => (
           <div key={label} className="stat-cell">
-            <div className="stat-num">{num}</div>
+            <div className="stat-num">{prefix}{counters[i]}{suffix}</div>
             <div className="stat-label">{label}</div>
-            <div className="stat-sub">{sub}</div>
+            <div className="stat-sub">per optimized batch</div>
           </div>
         ))}
       </div>
@@ -848,27 +620,36 @@ export default function Shipments() {
                 </div>
                 <div className="sidebar-card-body" style={{ display:'flex', flexDirection:'column', gap:'0.75rem' }}>
                   {truckList.map(t => (
-                    <div key={t.id} onClick={() => setSelected(t.shipments[0])}
-                      style={{ background:'rgba(255,255,255,0.02)', border:'1px solid var(--border)', borderRadius:12, padding:'0.9rem 1rem', cursor:'pointer', transition:'all 0.2s' }}
-                      onMouseEnter={e=>{ e.currentTarget.style.borderColor=`${t.color}55`; e.currentTarget.style.boxShadow=`0 0 16px ${t.color}18` }}
-                      onMouseLeave={e=>{ e.currentTarget.style.borderColor='var(--border)'; e.currentTarget.style.boxShadow='none' }}
+                    <div key={t.id}
+                      style={{ background:'rgba(255,255,255,0.02)', border:'1px solid var(--border)', borderRadius:12, overflow:'hidden', transition:'all 0.2s' }}
                     >
-                      <div style={{ display:'flex', alignItems:'center', gap:'0.6rem', marginBottom:'0.6rem' }}>
+                      <div
+                        onClick={() => setSelected(selected === t.id ? null : t.id)}
+                        style={{ display:'flex', alignItems:'center', gap:'0.6rem', padding:'0.9rem 1rem', cursor:'pointer' }}
+                        onMouseEnter={e=>e.currentTarget.style.background='rgba(255,255,255,0.03)'}
+                        onMouseLeave={e=>e.currentTarget.style.background='transparent'}
+                      >
                         <div style={{ width:8, height:8, borderRadius:'50%', background:t.color, boxShadow:`0 0 6px ${t.color}`, flexShrink:0 }}/>
                         <div style={{ fontFamily:"'Syne',sans-serif", fontSize:'0.88rem', fontWeight:700, flex:1 }}>{t.id}</div>
                         <div style={{ fontFamily:"'JetBrains Mono',monospace", fontSize:'0.75rem', fontWeight:700, color:t.color }}>{t.util}%</div>
+                        <div style={{ color:'var(--text-muted)', fontSize:'0.7rem', marginLeft:4 }}>{selected === t.id ? '▲' : '▼'}</div>
                       </div>
-                      <div className="util-bar-wrap" style={{ marginBottom:'0.5rem' }}>
-                        <div className="util-bar" style={{ width:`${t.util}%`, background:`linear-gradient(90deg,${t.color}88,${t.color})` }}/>
-                      </div>
-                      <div style={{ fontSize:'0.68rem', fontFamily:"'JetBrains Mono',monospace", color:'var(--text-muted)', marginBottom:'0.5rem' }}>{t.route} · {t.load}/{t.cap} kg</div>
-                      <div style={{ display:'flex', gap:'0.35rem', flexWrap:'wrap' }}>
-                        {t.shipments.map(sid => (
-                          <span key={sid} onClick={e=>{ e.stopPropagation(); setSelected(sid) }}
-                            style={{ fontSize:'0.6rem', padding:'2px 6px', borderRadius:4, fontFamily:"'JetBrains Mono',monospace", background:`${t.color}15`, border:`1px solid ${t.color}30`, color:t.color, cursor:'pointer' }}
-                          >{sid}</span>
-                        ))}
-                      </div>
+                      {selected === t.id && (
+                        <div style={{ padding:'0 1rem 1rem', borderTop:'1px solid var(--border)' }}>
+                          <div className="util-bar-wrap" style={{ margin:'0.75rem 0 0.5rem' }}>
+                            <div className="util-bar" style={{ width:`${t.util}%`, background:`linear-gradient(90deg,${t.color}88,${t.color})` }}/>
+                          </div>
+                          <div style={{ fontSize:'0.68rem', fontFamily:"'JetBrains Mono',monospace", color:'var(--text-muted)', marginBottom:'0.75rem' }}>{t.route} · {t.load}/{t.cap} kg</div>
+                          <div style={{ display:'flex', gap:'0.35rem', flexWrap:'wrap' }}>
+                            {t.shipments.map(sid => (
+                              <span key={sid}
+                                style={{ fontSize:'0.6rem', padding:'2px 6px', borderRadius:4, fontFamily:"'JetBrains Mono',monospace", background:`${t.color}15`, border:`1px solid ${t.color}30`, color:t.color, cursor:'pointer' }}
+                                onClick={e=>{ e.stopPropagation(); setSelected(sid) }}
+                              >{sid}</span>
+                            ))}
+                          </div>
+                        </div>
+                      )}
                     </div>
                   ))}
                 </div>
@@ -878,57 +659,6 @@ export default function Shipments() {
           </div>
         </div>
       </div>
-
-      {/* ════ FOOTER (identical to Home) ════ */}
-      {/* ✏️ EDIT: footer badge list, team names */}
-      <footer className="lorri-footer">
-        <div className="footer-grid">
-          <div>
-            <div className="footer-brand">
-              <svg viewBox="0 0 120 140" width="20" height="23" fill="none">
-                <path stroke="var(--page-accent)" strokeWidth="2.5" strokeLinejoin="round" strokeLinecap="round" d="M28 42 L18 10 L44 30 Z"/>
-                <path stroke="var(--page-accent)" strokeWidth="2.5" strokeLinejoin="round" strokeLinecap="round" d="M92 42 L102 10 L76 30 Z"/>
-                <path stroke="var(--page-accent)" strokeWidth="2.2" strokeLinejoin="round" strokeLinecap="round" d="M22 70 Q18 50 28 42 Q44 30 60 28 Q76 30 92 42 Q102 50 98 70 Q96 90 80 100 Q70 108 60 110 Q50 108 40 100 Q24 90 22 70 Z"/>
-                <ellipse stroke="var(--page-accent)" strokeWidth="2" cx="42" cy="62" rx="7" ry="8"/>
-                <ellipse stroke="var(--page-accent)" strokeWidth="2" cx="78" cy="62" rx="7" ry="8"/>
-              </svg>
-              Lorri
-            </div>
-            <p className="footer-desc">AI-powered load consolidation. Fewer trucks, lower costs, less carbon — optimized in seconds using OR-Tools and LangGraph.</p>
-            <div className="footer-badges">
-              {['OR-Tools','LangGraph','FastAPI','React','Globe.gl','Recharts'].map(t => (
-                <span key={t} className="footer-badge">{t}</span>
-              ))}
-            </div>
-          </div>
-          <div>
-            <div className="footer-col-title">Product</div>
-            {[['Shipments','/shipments'],['Optimizer','/optimize'],['Scenarios','/scenarios'],['AI Insights','/insights']].map(([l,t]) => (
-              <span key={l} className="footer-link" onClick={() => nav(t)}>{l}</span>
-            ))}
-          </div>
-          <div>
-            <div className="footer-col-title">Stack</div>
-            {['OR-Tools MIP','LangGraph Agents','scikit-learn','Globe.gl','Recharts','SQLite / PG'].map(t => (
-              <span key={t} className="footer-link">{t}</span>
-            ))}
-          </div>
-          <div>
-            <div className="footer-col-title">Team</div>
-            {['Manikya — Frontend','Muaaz — AI & Backend','Vaishnavi — OR Engine','Rajkumar — OR Engine'].map(t => (
-              <span key={t} className="footer-link">{t}</span>
-            ))}
-          </div>
-        </div>
-        <div className="footer-bottom">
-          <span className="footer-bottom-l">© 2025 Lorri · Load Consolidation Intelligence · Hackathon Build</span>
-          <div className="footer-bottom-r">
-            <span className="footer-bottom-link">Privacy</span>
-            <span className="footer-bottom-link">Terms</span>
-            <span className="footer-bottom-link">GitHub</span>
-          </div>
-        </div>
-      </footer>
-    </div>
+    </PageShell>
   )
 }

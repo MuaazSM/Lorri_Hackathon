@@ -1,8 +1,10 @@
 import { useNavigate } from 'react-router-dom'
 import { useEffect, useRef, useState } from 'react'
-import Navbar from '@/components/layout/Navbar'
+import FoxMascot from '@/components/FoxMascot'
 import { Zap } from 'lucide-react'
 import { DEMO_METRICS } from '@/data/demoData'
+import PageShell from '@/components/layout/PageShell'
+
 
 /* ── Animated counter hook ── */
 function useCounter(target, duration = 1800, start = false) {
@@ -44,24 +46,24 @@ const FEATURES = [
   {
     num: '01',
     tag: 'Engine',
-    title: 'OR-Tools MIP Solver',
-    desc: 'Binary decision variables assign each shipment to exactly one truck. The solver minimises total trips while maximising utilisation — constrained by weight, volume, time windows and compatibility.',
+    title: 'OR Tools MIP Solver',
+    desc: 'Binary decision variables assign each shipment to exactly one truck. The solver minimises total trips while maximising utilisation constrained by weight, volume, time windows and compatibility.',
     bullets: ['Weight & volume capacity', 'Time window feasibility', 'Heuristic fallback >50 shipments'],
     to: '/optimize',
   },
   {
     num: '02',
     tag: 'Intelligence',
-    title: 'Four-Agent LangGraph Pipeline',
+    title: 'Four Agent LangGraph Pipeline',
     desc: 'An agentic decision loop validates inputs, explains outputs in plain language, relaxes blocking constraints, and recommends the best plan across all scenarios.',
-    bullets: ['Validation before solve', 'Human-readable insights', 'Constraint relaxation suggestions'],
+    bullets: ['Validation before solve', 'Human readable insights', 'Constraint relaxation suggestions'],
     to: '/insights',
   },
   {
     num: '03',
     tag: 'Scenarios',
-    title: 'What-If Scenario Engine',
-    desc: 'Run the same batch under four different business conditions — strict SLAs, flexible windows, reduced fleet, or demand surge — and compare cost, carbon, and utilisation side by side.',
+    title: 'What If Scenario Engine',
+    desc: 'Run the same batch under four different business conditions strict SLAs, flexible windows, reduced fleet, or demand surge and compare cost, carbon, and utilisation side by side.',
     bullets: ['Strict vs Flexible SLA', 'Vehicle Shortage mode', 'Demand Surge simulation'],
     to: '/scenarios',
   },
@@ -69,13 +71,62 @@ const FEATURES = [
     num: '04',
     tag: 'Visibility',
     title: 'Live Route Map',
-    desc: 'Every origin–destination pair visualised on an interactive Leaflet map. Routes colour-coded by consolidation group, clickable for full shipment details.',
-    bullets: ['Mumbai · Pune · Delhi lanes', 'Colour-coded groups', 'Click for shipment drawer'],
+    desc: 'Every origin destination pair visualised on an interactive Leaflet map. Routes colour coded by consolidation group, clickable for full shipment details.',
+    bullets: ['Mumbai · Pune · Delhi lanes', 'Colour coded groups', 'Click for shipment drawer'],
     to: '/shipments',
   },
 ]
 
 export default function Home() {
+    const HOME_ARCS = [
+    { startLat:19.076,  startLng:72.8777, endLat:18.5204, endLng:73.8567, color:'#f59e0b', label:'G1 · V001 · Mumbai→Pune' },
+    { startLat:18.5204, startLng:73.8567, endLat:28.6139, endLng:77.209,  color:'#10b981', label:'G2 · V004 · Pune→Delhi'  },
+    { startLat:19.076,  startLng:72.8777, endLat:28.6139, endLng:77.209,  color:'#06b6d4', label:'G3 · V003 · Mumbai→Delhi' },
+  ]
+  const HOME_CITIES = {
+    Mumbai: { lat:19.076,  lng:72.8777, color:'#f59e0b' },
+    Pune:   { lat:18.5204, lng:73.8567, color:'#10b981' },
+    Delhi:  { lat:28.6139, lng:77.209,  color:'#06b6d4' },
+  }
+  function homeHexToRgb(hex) {
+    return `${parseInt(hex.slice(1,3),16)},${parseInt(hex.slice(3,5),16)},${parseInt(hex.slice(5,7),16)}`
+  }
+  function HomeGlobeMap() {
+    const containerRef = useRef(null)
+    useEffect(() => {
+      if (!containerRef.current) return
+      let cancelled = false
+      import('globe.gl').then(({ default: Globe }) => {
+        if (cancelled || !containerRef.current) return
+        containerRef.current.innerHTML = ''
+        const cityPoints = Object.entries(HOME_CITIES).map(([name, c]) => ({ name, ...c }))
+        const g = Globe({ animateIn: true })(containerRef.current)
+          .globeImageUrl('//unpkg.com/three-globe/example/img/earth-dark.jpg')
+          .backgroundImageUrl('//unpkg.com/three-globe/example/img/night-sky.png')
+          .width(containerRef.current.offsetWidth || 500)
+          .height(220)
+          .pointOfView({ lat:22, lng:78, altitude:1.8 }, 0)
+          .arcsData(HOME_ARCS)
+          .arcStartLat(d=>d.startLat).arcStartLng(d=>d.startLng)
+          .arcEndLat(d=>d.endLat).arcEndLng(d=>d.endLng)
+          .arcColor(d=>[d.color,d.color])
+          .arcAltitude(0.25).arcStroke(1.2)
+          .arcDashLength(0.4).arcDashGap(0.15).arcDashAnimateTime(2200)
+          .pointsData(cityPoints)
+          .pointLat(d=>d.lat).pointLng(d=>d.lng)
+          .pointColor(d=>d.color).pointAltitude(0.01).pointRadius(0.5)
+          .ringsData(cityPoints)
+          .ringLat(d=>d.lat).ringLng(d=>d.lng)
+          .ringColor(d=>t=>`rgba(${homeHexToRgb(d.color)},${1-t})`)
+          .ringMaxRadius(3).ringPropagationSpeed(1.5).ringRepeatPeriod(1500)
+        g.controls().autoRotate = true
+        g.controls().autoRotateSpeed = 0.5
+        g.controls().enableZoom = false
+      }).catch(()=>{})
+      return () => { cancelled = true }
+    }, [])
+    return <div ref={containerRef} style={{ width:'100%', height:'220px', background:'#060609', borderRadius:10 }} />
+  }
   const nav = useNavigate()
   const statsRef = useRef(null)
   const [statsVisible, setStatsVisible] = useState(false)
@@ -93,265 +144,8 @@ export default function Home() {
   const counters = [c0, c1, c2, c3]
 
   return (
-    <div className="lorri-home">
+    <PageShell>
       <style>{`
-        /* ─── Base ─── */
-        .lorri-home {
-          min-height: 100vh;
-          display: flex;
-          flex-direction: column;
-          position: relative;
-          overflow-x: clip;
-        }
-
-        /* ─── Dot grid texture ─── */
-        .lorri-home::before {
-          content: '';
-          position: fixed;
-          inset: 0;
-          z-index: 0;
-          background-image: radial-gradient(circle, rgba(var(--page-glow-rgb), 0.18) 1px, transparent 1px);
-          background-size: 32px 32px;
-          pointer-events: none;
-          mask-image: radial-gradient(ellipse 80% 80% at 50% 50%, black 30%, transparent 100%);
-        }
-
-        /* ─── Sections ─── */
-        .home-section {
-          position: relative;
-          z-index: 1;
-          width: 100%;
-        }
-        .home-inner {
-          max-width: 1160px;
-          margin: 0 auto;
-          padding: 0 3rem;
-        }
-
-        /* ─── HERO ─── CHANGE 1: min-height 100vh, padding bigger, sticky ── */
-        .hero-wrap {
-          min-height: 100vh;
-          display: flex;
-          flex-direction: column;
-          align-items: center;
-          justify-content: center;
-          text-align: center;
-          padding: 8rem 2rem 6rem;
-          position: sticky;
-          top: 0;
-          z-index: 1;
-        }
-        .hero-tag {
-          display: inline-flex;
-          align-items: center;
-          gap: 6px;
-          padding: 5px 14px;
-          border-radius: 9999px;
-          border: 1px solid rgba(var(--page-glow-rgb), 0.45);
-          background: rgba(var(--page-glow-rgb), 0.1);
-          font-size: 0.7rem;
-          font-family: 'JetBrains Mono', monospace;
-          color: var(--page-accent);
-          letter-spacing: 0.12em;
-          text-transform: uppercase;
-          margin-bottom: 2.2rem;
-          cursor: default;
-          transition: all 0.3s ease;
-          opacity: 0;
-          animation: fadeSlideUp 0.5s ease 0.1s forwards;
-        }
-        .hero-tag:hover {
-          background: rgba(var(--page-glow-rgb), 0.28);
-          border-color: var(--page-accent);
-          box-shadow: 0 0 20px rgba(var(--page-glow-rgb), 0.45),
-                      0 0 50px rgba(var(--page-glow-rgb), 0.15);
-          transform: scale(1.05);
-        }
-        .hero-h1 {
-          font-family: 'Syne', sans-serif;
-          font-size: clamp(2.8rem, 5.5vw, 5.2rem);
-          font-weight: 800;
-          line-height: 1.02;
-          letter-spacing: -0.03em;
-          margin-bottom: 1.4rem;
-        }
-        .hero-sub {
-          font-size: 1.05rem;
-          color: var(--text-secondary);
-          max-width: 500px;
-          line-height: 1.75;
-          margin-bottom: 2.8rem;
-        }
-        .hero-cta-row {
-          display: flex;
-          gap: 12px;
-          justify-content: center;
-          flex-wrap: wrap;
-          opacity: 0;
-          animation: fadeSlideUp 0.5s ease 1.7s forwards;
-        }
-        /* ─── CHANGE 2: both buttons same design ─── */
-        .btn-primary {
-          display: inline-flex; align-items: center; gap: 8px;
-          padding: 13px 30px; border-radius: 12px; border: none;
-          background: var(--page-accent); color: #0a0a0a;
-          font-weight: 700; font-size: 0.9rem; cursor: pointer;
-          font-family: 'DM Sans', sans-serif;
-          box-shadow: 0 0 28px rgba(var(--page-glow-rgb), 0.45);
-          transition: all 0.22s ease;
-        }
-        .btn-primary:hover {
-          transform: translateY(-2px);
-          box-shadow: 0 0 48px rgba(var(--page-glow-rgb), 0.65);
-        }
-        .btn-outline {
-          display: inline-flex; align-items: center; gap: 8px;
-          padding: 13px 30px; border-radius: 12px; border: none;
-          background: var(--page-accent); color: #0a0a0a;
-          font-weight: 700; font-size: 0.9rem; cursor: pointer;
-          font-family: 'DM Sans', sans-serif;
-          box-shadow: 0 0 28px rgba(var(--page-glow-rgb), 0.45);
-          transition: all 0.22s ease;
-        }
-        .btn-outline:hover {
-          transform: translateY(-2px);
-          box-shadow: 0 0 48px rgba(var(--page-glow-rgb), 0.65);
-        }
-
-        /* ─── Scroll hint ─── */
-        .scroll-hint {
-          position: absolute;
-          bottom: 2.5rem;
-          left: calc(50% - 25px);
-          transform: translateX(-50%);
-          display: flex;
-          flex-direction: column;
-          align-items: center;
-          gap: 6px;
-          opacity: 0;
-          animation: fadeSlideUp 0.5s ease 2s forwards;
-        }
-        .scroll-hint span {
-          font-size: 0.65rem;
-          font-family: 'JetBrains Mono', monospace;
-          color: var(--text-muted);
-          letter-spacing: 0.1em;
-          text-transform: uppercase;
-        }
-        .scroll-line {
-          width: 1px;
-          height: 40px;
-          background: linear-gradient(to bottom, var(--page-accent), transparent);
-          animation: scrollPulse 2s ease-in-out infinite;
-        }
-        @keyframes scrollPulse {
-          0%,100% { opacity: 0.4; transform: scaleY(1); }
-          50%      { opacity: 1;   transform: scaleY(1.15); }
-        }
-
-        /* ─── Marquee ─── */
-        .marquee-wrap {
-          overflow: hidden;
-          border-top: 1px solid var(--border);
-          border-bottom: 1px solid var(--border);
-          padding: 0.9rem 0;
-          position: relative;
-          z-index: 1;
-        }
-        .marquee-track {
-          display: flex;
-          gap: 0;
-          animation: marquee 22s linear infinite;
-          width: max-content;
-        }
-        .marquee-item {
-          font-family: 'Syne', sans-serif;
-          font-size: 0.75rem;
-          font-weight: 600;
-          color: var(--text-muted);
-          white-space: nowrap;
-          letter-spacing: 0.14em;
-          text-transform: uppercase;
-          padding: 0 2rem;
-        }
-        .marquee-dot {
-          color: var(--page-accent);
-          padding: 0 0.2rem;
-        }
-        @keyframes marquee {
-          from { transform: translateX(0); }
-          to   { transform: translateX(-50%); }
-        }
-
-        /* ─── Stats ─── */
-        .stats-grid {
-          display: grid;
-          grid-template-columns: repeat(4, 1fr);
-          border-bottom: 1px solid var(--border);
-          position: relative;
-          z-index: 1;
-        }
-        .stat-cell {
-          padding: 2.5rem 3rem;
-          border-right: 1px solid var(--border);
-          position: relative;
-          overflow: hidden;
-          transition: background 0.3s;
-        }
-        .stat-cell:last-child { border-right: none; }
-        .stat-cell:hover { background: rgba(var(--page-glow-rgb), 0.06); }
-        .stat-cell::before {
-          content: '';
-          position: absolute;
-          bottom: 0; left: 0; right: 0;
-          height: 2px;
-          background: linear-gradient(90deg, transparent, var(--page-accent), transparent);
-          transform: scaleX(0);
-          transition: transform 0.4s ease;
-        }
-        .stat-cell:hover::before { transform: scaleX(1); }
-        .stat-num {
-          font-family: 'Syne', sans-serif;
-          font-size: 3rem;
-          font-weight: 800;
-          color: var(--page-accent);
-          line-height: 1;
-          margin-bottom: 0.4rem;
-          letter-spacing: -0.02em;
-        }
-        .stat-label {
-          font-size: 0.8rem;
-          color: var(--text-secondary);
-          margin-bottom: 2px;
-          font-weight: 500;
-        }
-        .stat-sub {
-          font-size: 0.68rem;
-          color: var(--text-muted);
-          font-family: 'JetBrains Mono', monospace;
-        }
-
-        /* ─── Section divider ─── */
-        .section-divider {
-          display: flex;
-          align-items: center;
-          gap: 1rem;
-          padding: 3.5rem 3rem 0;
-        }
-        .section-divider-label {
-          font-size: 0.68rem;
-          font-family: 'JetBrains Mono', monospace;
-          color: var(--text-muted);
-          text-transform: uppercase;
-          letter-spacing: 0.14em;
-          white-space: nowrap;
-        }
-        .section-divider-line {
-          flex: 1;
-          height: 1px;
-          background: var(--border);
-        }
-
         /* ─── Features alternating ─── */
         .features-wrap {
           padding: 0 3rem 5rem;
@@ -573,140 +367,14 @@ export default function Home() {
           margin-bottom: 2.5rem;
           position: relative;
         }
-
-        /* ─── Footer ─── */
-        .lorri-footer {
-          border-top: 1px solid var(--border);
-          position: relative;
-          z-index: 1;
-        }
-        .footer-grid {
-          padding: 3.5rem 3rem 2rem;
-          display: grid;
-          grid-template-columns: 2fr 1fr 1fr 1fr;
-          gap: 3rem;
-        }
-        .footer-brand {
-          font-family: 'Syne', sans-serif;
-          font-size: 1.15rem;
-          font-weight: 800;
-          color: var(--page-accent);
-          display: flex;
-          align-items: center;
-          gap: 8px;
-          margin-bottom: 0.6rem;
-        }
-        .footer-desc {
-          font-size: 0.82rem;
-          color: var(--text-muted);
-          line-height: 1.7;
-          max-width: 230px;
-          margin-bottom: 1.2rem;
-        }
-        .footer-badges {
-          display: flex;
-          flex-wrap: wrap;
-          gap: 0.4rem;
-        }
-        .footer-badge {
-          font-size: 0.65rem;
-          font-family: 'JetBrains Mono', monospace;
-          padding: 3px 8px;
-          border-radius: 5px;
-          border: 1px solid var(--border);
-          color: var(--text-muted);
-          cursor: default;
-          transition: all 0.2s;
-        }
-        .footer-badge:hover {
-          border-color: var(--page-accent);
-          color: var(--page-accent);
-        }
-        .footer-col-title {
-          font-family: 'Syne', sans-serif;
-          font-size: 0.72rem;
-          font-weight: 700;
-          text-transform: uppercase;
-          letter-spacing: 0.12em;
-          color: var(--text-secondary);
-          margin-bottom: 1.1rem;
-        }
-        .footer-link {
-          display: block;
-          font-size: 0.82rem;
-          color: var(--text-muted);
-          margin-bottom: 0.55rem;
-          cursor: pointer;
-          text-decoration: none;
-          transition: all 0.2s ease;
-          width: fit-content;
-        }
-        .footer-link:hover {
-          color: var(--page-accent);
-          transform: translateX(3px);
-          text-shadow: 0 0 10px rgba(var(--page-glow-rgb), 0.5);
-        }
-        .footer-bottom {
-          max-width: 100%;
-          border-top: 1px solid var(--border);
-          padding: 1.2rem 3rem;
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-        }
-        .footer-bottom-l {
-          font-size: 0.72rem;
-          color: var(--text-muted);
-          font-family: 'JetBrains Mono', monospace;
-        }
-        .footer-bottom-r {
-          display: flex;
-          gap: 1.5rem;
-        }
-        .footer-bottom-link {
-          font-size: 0.72rem;
-          color: var(--text-muted);
-          cursor: pointer;
-          transition: color 0.2s;
-        }
-        .footer-bottom-link:hover { color: var(--page-accent); }
-
-        /* ─── Animations ─── */
-        @keyframes fadeSlideUp {
-          from { opacity: 0; transform: translateY(18px); }
-          to   { opacity: 1; transform: translateY(0); }
-        }
-        .blur-line { display: flex; flex-wrap: wrap; justify-content: center; gap: 0.22em; }
-        .blur-word {
-          display: inline-block; opacity: 0;
-          filter: blur(16px); transform: translateX(-14px);
-          animation: blurWordIn 0.6s cubic-bezier(0.22,1,0.36,1) forwards;
-        }
-        @keyframes blurWordIn {
-          0%   { opacity:0;   filter:blur(16px); transform:translateX(-14px); }
-          55%  { opacity:0.9; filter:blur(2px);  transform:translateX(2px);  }
-          100% { opacity:1;   filter:blur(0);    transform:translateX(0);    }
-        }
-        .blur-word-sub {
-          display: inline-block; opacity: 0;
-          filter: blur(8px); transform: translateX(-8px);
-          animation: blurWordSub 0.5s cubic-bezier(0.22,1,0.36,1) forwards;
-        }
-        @keyframes blurWordSub {
-          from { opacity:0; filter:blur(8px); transform:translateX(-8px); }
-          to   { opacity:1; filter:blur(0);   transform:translateX(0);    }
-        }
       `}</style>
-
-      {/* ── Navbar ── */}
-      <Navbar />
 
       {/* ════ HERO ════ */}
       <section className="home-section">
         <div className="hero-wrap">
 
           <div className="hero-tag">
-            <Zap size={10} /> AI-Powered Load Consolidation
+            <Zap size={10} /> AI Powered Load Consolidation
           </div>
 
           <h1 className="hero-h1">
@@ -723,7 +391,7 @@ export default function Home() {
           </h1>
 
           <p className="hero-sub">
-            {['Lorri','uses','OR-Tools','+','LangGraph','agents','to','consolidate','your','shipments','—','cutting','trips,','costs,','and','carbon','in','seconds.'].map((w, i) => (
+            {['Lorri','uses','OR Tools','+','LangGraph','agents','to','consolidate','your','shipments','cutting','trips,','costs,','and','carbon','in','seconds.'].map((w, i) => (
               <span key={i} className="blur-word-sub" style={{ animationDelay: `${0.65 + i * 0.042}s`, marginRight: '0.3em' }}>{w}</span>
             ))}
           </p>
@@ -748,11 +416,11 @@ export default function Home() {
       {/* ════ MARQUEE ════ */}
       <div className="marquee-wrap">
         <div className="marquee-track">
-          {['Load Consolidation','Fewer Trucks','Lower Costs','Less Carbon','OR-Tools Solver','AI Insights','Smart Routing','Max Utilization','Time Windows','Heuristic Fallback','LangGraph Agents','Scenario Engine'].flatMap((t,i) => [
+          {['Load Consolidation','Fewer Trucks','Lower Costs','Less Carbon','OR Tools Solver','AI Insights','Smart Routing','Max Utilization','Time Windows','Heuristic Fallback','LangGraph Agents','Scenario Engine'].flatMap((t,i) => [
             <span key={`a${i}`} className="marquee-item">{t}</span>,
             <span key={`d${i}`} className="marquee-item marquee-dot">·</span>,
           ]).concat(
-            ['Load Consolidation','Fewer Trucks','Lower Costs','Less Carbon','OR-Tools Solver','AI Insights','Smart Routing','Max Utilization','Time Windows','Heuristic Fallback','LangGraph Agents','Scenario Engine'].flatMap((t,i) => [
+            ['Load Consolidation','Fewer Trucks','Lower Costs','Less Carbon','OR Tools Solver','AI Insights','Smart Routing','Max Utilization','Time Windows','Heuristic Fallback','LangGraph Agents','Scenario Engine'].flatMap((t,i) => [
               <span key={`b${i}`} className="marquee-item">{t}</span>,
               <span key={`e${i}`} className="marquee-item marquee-dot">·</span>,
             ])
@@ -843,7 +511,7 @@ export default function Home() {
                 {idx === 1 && (
                   <div style={{ display:'flex', flexDirection:'column', gap:'0.65rem' }}>
                     {[
-                      { agent:'Insight Agent',     color:'#06b6d4', msg:'91% utilisation on Mumbai–Pune lane. ₹10.5k saved vs individual dispatch.' },
+                      { agent:'Insight Agent',     color:'#06b6d4', msg:'91% utilisation on Mumbai Pune lane. ₹10.5k saved vs individual dispatch.' },
                       { agent:'Relaxation Agent',  color:'#10b981', msg:'Relax S003 window by 45 min → consolidation with S006 feasible.' },
                       { agent:'Scenario Recommender', color:'var(--page-accent)', msg:'Flexible SLA = best cost. Strict SLA = best compliance.' },
                     ].map(({ agent, color, msg }) => (
@@ -875,27 +543,12 @@ export default function Home() {
 
                 {idx === 3 && (
                   <div>
-                    <div style={{ background:'rgba(255,255,255,0.03)', borderRadius:'12px', padding:'1rem', height:'160px', display:'flex', alignItems:'center', justifyContent:'center', border:'1px solid var(--border)', position:'relative', overflow:'hidden' }}>
-                      <svg viewBox="0 0 300 140" width="100%" height="100%" fill="none">
-                        {[0,1,2,3].map(i => <line key={i} x1="0" y1={i*40+20} x2="300" y2={i*40+20} stroke="rgba(255,255,255,0.05)" strokeWidth="1"/>)}
-                        <line x1="40" y1="110" x2="150" y2="70" stroke="#f59e0b" strokeWidth="2" strokeDasharray="5,3" opacity="0.8"/>
-                        <line x1="40" y1="110" x2="150" y2="70" stroke="#f59e0b" strokeWidth="2" strokeDasharray="5,3" opacity="0.5" transform="translate(10,5)"/>
-                        <line x1="150" y1="70" x2="260" y2="30" stroke="#06b6d4" strokeWidth="2" strokeDasharray="5,3" opacity="0.8"/>
-                        <line x1="40" y1="110" x2="260" y2="30" stroke="#10b981" strokeWidth="1.5" strokeDasharray="3,4" opacity="0.5"/>
-                        {[[40,110,'Mumbai'],[150,70,'Pune'],[260,30,'Delhi']].map(([cx,cy,name]) => (
-                          <g key={name}>
-                            <circle cx={cx} cy={cy} r="6" fill="#0a0a0a" stroke="var(--page-accent)" strokeWidth="2"/>
-                            <circle cx={cx} cy={cy} r="2" fill="var(--page-accent)"/>
-                            <text x={cx} y={cy-12} textAnchor="middle" fill="var(--text-muted)" fontSize="9" fontFamily="JetBrains Mono">{name}</text>
-                          </g>
-                        ))}
-                      </svg>
-                    </div>
+                    <HomeGlobeMap />
                     <div style={{ display:'flex', gap:'0.75rem', marginTop:'0.75rem' }}>
-                      {[['#f59e0b','S001+S002+S005'],['#06b6d4','S003'],['#10b981','S004']].map(([c,l]) => (
-                        <div key={l} style={{ display:'flex', alignItems:'center', gap:'4px', fontSize:'0.65rem', color:'var(--text-muted)', fontFamily:'JetBrains Mono' }}>
-                          <span style={{ width:8, height:2, background:c, borderRadius:1, display:'inline-block' }}/>
-                          {l}
+                      {HOME_ARCS.map(a => (
+                        <div key={a.label} style={{ display:'flex', alignItems:'center', gap:6, fontSize:'0.65rem', color:'var(--text-muted)', fontFamily:'JetBrains Mono' }}>
+                          <div style={{ width:16, height:2, background:a.color, borderRadius:1, boxShadow:`0 0 4px ${a.color}` }}/>
+                          {a.label.split('·')[2]?.trim()}
                         </div>
                       ))}
                     </div>
@@ -906,81 +559,6 @@ export default function Home() {
           ))}
         </div>
       </div>
-
-      {/* ════ BOTTOM CTA ════ */}
-      <div className="cta-section">
-        <div className="cta-inner">
-          <div className="cta-glow" />
-          <h2 className="cta-h2">
-            Ready to consolidate?
-          </h2>
-          <p className="cta-sub">
-            Load your shipments, run the solver, watch the savings appear.
-          </p>
-          <div style={{ display:'flex', gap:'12px', justifyContent:'center', flexWrap:'wrap' }}>
-            <button className="btn-outline" onClick={() => nav('/scenarios')}>
-              <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/><line x1="2" y1="20" x2="22" y2="20"/></svg>
-              Scenarios
-            </button>
-            <button className="btn-outline" onClick={() => nav('/insights')}>
-              <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="8" r="5"/><path d="M9 13v2a3 3 0 0 0 6 0v-2"/><line x1="9" y1="17" x2="15" y2="17"/><line x1="12" y1="19" x2="12" y2="21"/></svg>
-              Insights
-            </button>
-          </div>
-        </div>
-      </div>
-
-      {/* ════ FOOTER ════ */}
-      <footer className="lorri-footer">
-        <div className="footer-grid">
-          <div>
-            <div className="footer-brand">
-              <svg viewBox="0 0 120 140" width="20" height="23" fill="none">
-                <path stroke="var(--page-accent)" strokeWidth="2.5" strokeLinejoin="round" strokeLinecap="round" d="M28 42 L18 10 L44 30 Z"/>
-                <path stroke="var(--page-accent)" strokeWidth="2.5" strokeLinejoin="round" strokeLinecap="round" d="M92 42 L102 10 L76 30 Z"/>
-                <path stroke="var(--page-accent)" strokeWidth="2.2" strokeLinejoin="round" strokeLinecap="round" d="M22 70 Q18 50 28 42 Q44 30 60 28 Q76 30 92 42 Q102 50 98 70 Q96 90 80 100 Q70 108 60 110 Q50 108 40 100 Q24 90 22 70 Z"/>
-                <ellipse stroke="var(--page-accent)" strokeWidth="2" cx="42" cy="62" rx="7" ry="8"/>
-                <ellipse stroke="var(--page-accent)" strokeWidth="2" cx="78" cy="62" rx="7" ry="8"/>
-              </svg>
-              Lorri
-            </div>
-            <p className="footer-desc">
-              AI-powered load consolidation. Fewer trucks, lower costs, less carbon — optimized in seconds using OR-Tools and LangGraph.
-            </p>
-            <div className="footer-badges">
-              {['OR-Tools','LangGraph','FastAPI','React','Leaflet','Recharts'].map(t => (
-                <span key={t} className="footer-badge">{t}</span>
-              ))}
-            </div>
-          </div>
-          <div>
-            <div className="footer-col-title">Product</div>
-            {[['Shipments','/shipments'],['Optimizer','/optimize'],['Scenarios','/scenarios'],['AI Insights','/insights']].map(([l,t]) => (
-              <span key={l} className="footer-link" onClick={() => nav(t)}>{l}</span>
-            ))}
-          </div>
-          <div>
-            <div className="footer-col-title">Stack</div>
-            {['OR-Tools MIP','LangGraph Agents','scikit-learn','Leaflet Maps','Recharts','SQLite / PG'].map(t => (
-              <span key={t} className="footer-link">{t}</span>
-            ))}
-          </div>
-          <div>
-            <div className="footer-col-title">Team</div>
-            {['Manikya — Frontend','Muaaz — AI & Backend','Vaishnavi — OR Engine','Rajkumar — OR Engine'].map(t => (
-              <span key={t} className="footer-link">{t}</span>
-            ))}
-          </div>
-        </div>
-        <div className="footer-bottom">
-          <span className="footer-bottom-l">© 2025 Lorri · Load Consolidation Intelligence · Hackathon Build</span>
-          <div className="footer-bottom-r">
-            <span className="footer-bottom-link">Privacy</span>
-            <span className="footer-bottom-link">Terms</span>
-            <span className="footer-bottom-link">GitHub</span>
-          </div>
-        </div>
-      </footer>
-    </div>
+    </PageShell>
   )
 }
