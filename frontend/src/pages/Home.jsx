@@ -99,6 +99,9 @@ function HomeGlobeMap() {
   useEffect(() => {
     if (!containerRef.current) return
     let cancelled = false
+    // Delay globe init until hero blur animations have finished (~700ms)
+    // so WebGL context creation doesn't compete with CSS blur on the GPU
+    const timer = setTimeout(() => {
     import('globe.gl').then(({ default: Globe }) => {
       if (cancelled || !containerRef.current) return
       containerRef.current.innerHTML = ''
@@ -126,7 +129,8 @@ function HomeGlobeMap() {
       g.controls().autoRotateSpeed = 0.5
       g.controls().enableZoom = false
     }).catch(()=>{})
-    return () => { cancelled = true }
+    }, 800)
+    return () => { cancelled = true; clearTimeout(timer) }
   }, []) // empty — init once, never re-mount
   return <div ref={containerRef} style={{ width:'100%', height:'220px', background:'#060609', borderRadius:10 }} />
 }
