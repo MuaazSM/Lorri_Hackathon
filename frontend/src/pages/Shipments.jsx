@@ -70,14 +70,18 @@ function hexToRgb(hex) {
   return `${parseInt(hex.slice(1,3),16)},${parseInt(hex.slice(3,5),16)},${parseInt(hex.slice(5,7),16)}`
 }
 
-/* ─────────────────────────────────────────────
-   Globe component — lazy loads globe.gl
-   ✏️ EDIT: pointOfView lat/lng/altitude to reposition the camera
-───────────────────────────────────────────── */
+/* ─────────────────────────────────────────────────────────────
+   Globe component — FIX: init the globe ONCE, then update
+   arcsData() on filter changes without rebuilding the scene.
+   Previously, filter was in the useEffect dependency array,
+   causing a full import('globe.gl') + THREE.js scene teardown
+   and rebuild on every filter pill click.
+───────────────────────────────────────────────────────────── */
 function GlobeMap({ filter }) {
   const containerRef = useRef(null)
   const globeRef     = useRef(null)
 
+  // ── Create globe once on mount ──
   useEffect(() => {
     if (!containerRef.current) return
     let cancelled = false
@@ -86,23 +90,17 @@ function GlobeMap({ filter }) {
       if (cancelled || !containerRef.current) return
       containerRef.current.innerHTML = ''
 
-      const activeArcs = filter === 'All'
-        ? ARCS
-        : ARCS.filter(a => a.label.includes(filter.replace(' → ', '→')))
-
       const cityPoints = Object.entries(CITIES).map(([name, c]) => ({ name, ...c }))
 
       const g = Globe({ animateIn: true })(containerRef.current)
-        /* ✏️ EDIT: swap these image URLs for different globe textures */
         .globeImageUrl('//unpkg.com/three-globe/example/img/earth-dark.jpg')
         .bumpImageUrl('//unpkg.com/three-globe/example/img/earth-topology.png')
         .backgroundImageUrl('//unpkg.com/three-globe/example/img/night-sky.png')
         .width(containerRef.current.offsetWidth || 900)
         .height(520)
-        /* ✏️ EDIT: camera start position */
         .pointOfView({ lat: 22, lng: 78, altitude: 1.6 }, 0)
-        /* Arc routes */
-        .arcsData(activeArcs)
+        /* Arc routes — start with all arcs */
+        .arcsData(ARCS)
         .arcStartLat(d => d.startLat).arcStartLng(d => d.startLng)
         .arcEndLat(d => d.endLat).arcEndLng(d => d.endLng)
         .arcColor(d => [d.color, d.color])
@@ -121,7 +119,6 @@ function GlobeMap({ filter }) {
         .ringColor(d => t => `rgba(${hexToRgb(d.color)},${1 - t})`)
         .ringMaxRadius(3).ringPropagationSpeed(1.5).ringRepeatPeriod(1500)
 
-      /* ✏️ EDIT: auto-rotate speed (0 = off) */
       g.controls().autoRotate = true
       g.controls().autoRotateSpeed = 0.4
       g.controls().enableZoom = true
@@ -129,9 +126,16 @@ function GlobeMap({ filter }) {
       globeRef.current = g
     }).catch(() => {})
 
-    return () => {
-      cancelled = true
-    }
+    return () => { cancelled = true }
+  }, []) // ← empty — globe created once, never torn down on filter change
+
+  // ── Update arcs data only when filter changes (no scene rebuild) ──
+  useEffect(() => {
+    if (!globeRef.current) return
+    const activeArcs = filter === 'All'
+      ? ARCS
+      : ARCS.filter(a => a.label.includes(filter.replace(' → ', '→')))
+    globeRef.current.arcsData(activeArcs)
   }, [filter])
 
   return (
@@ -142,7 +146,7 @@ function GlobeMap({ filter }) {
 }
 
 /* ═══════════════════════════════════════════
-   Main page — structure mirrors Home exactly
+   Main page
 ═══════════════════════════════════════════ */
 export default function Shipments() {
   const nav = useNavigate()
@@ -164,7 +168,6 @@ export default function Shipments() {
   const c3 = useCounter(STATS[3].raw, 1500, statsVisible)
   const counters = [c0, c1, c2, c3]
 
-  
   // Map API shipments + optimization assignments to the page's expected shape
   const liveData = useMemo(() => {
     if (!apiShipments?.length) return null
@@ -245,14 +248,11 @@ export default function Shipments() {
   return (
     <PageShell>
     <style>{`
-        /* ─── Main content area ─── */
         .page-body {
           position: relative;
           z-index: 1;
           padding: 0 3rem 5rem;
         }
-
-        /* ─── Globe card ─── */
         .globe-card {
           background: var(--card);
           border: 1px solid var(--border);
@@ -280,8 +280,6 @@ export default function Shipments() {
           flex-wrap: wrap;
           background: rgba(0,0,0,0.2);
         }
-
-        /* ─── Filter pills ─── */
         .filter-pill {
           padding: 7px 18px;
           border-radius: 9999px;
@@ -305,15 +303,11 @@ export default function Shipments() {
           font-weight: 700;
           box-shadow: 0 0 16px rgba(var(--page-glow-rgb), 0.4);
         }
-
-        /* ─── Two-col layout: table + sidebar ─── */
         .content-grid {
           display: grid;
           grid-template-columns: 1fr 340px;
           gap: 1.5rem;
         }
-
-        /* ─── Table card ─── */
         .table-card {
           background: var(--card);
           border: 1px solid var(--border);
@@ -340,8 +334,6 @@ export default function Shipments() {
         .table-card tr { cursor: pointer; transition: background 0.15s; }
         .table-card tr:hover td { background: rgba(var(--page-glow-rgb), 0.05); }
         .table-card tr.sel td { background: rgba(var(--page-glow-rgb), 0.08); }
-
-        /* ─── Sidebar cards ─── */
         .sidebar-card {
           background: var(--card);
           border: 1px solid var(--border);
@@ -350,9 +342,7 @@ export default function Shipments() {
           margin-bottom: 1.25rem;
           transition: border-color 0.3s, box-shadow 0.3s;
         }
-        .sidebar-card:hover {
-          border-color: rgba(var(--page-glow-rgb), 0.3);
-        }
+        .sidebar-card:hover { border-color: rgba(var(--page-glow-rgb), 0.3); }
         .sidebar-card-header {
           padding: 1rem 1.25rem;
           border-bottom: 1px solid var(--border);
@@ -361,8 +351,6 @@ export default function Shipments() {
           justify-content: space-between;
         }
         .sidebar-card-body { padding: 1rem 1.25rem; }
-
-        /* ─── Util bar ─── */
         .util-bar-wrap {
           height: 4px;
           border-radius: 9999px;
@@ -373,8 +361,6 @@ export default function Shipments() {
           height: 100%;
           border-radius: 9999px;
         }
-
-        /* ─── Tag badge ─── */
         .badge {
           font-size: 0.6rem;
           padding: 2px 7px;
@@ -383,8 +369,6 @@ export default function Shipments() {
           text-transform: uppercase;
           letter-spacing: 0.06em;
         }
-
-        /* ─── Footer badges (Shipments-only) ─── */
         .footer-badges { display: flex; flex-wrap: wrap; gap: 0.4rem; }
         .footer-badge {
           font-size: 0.65rem;
@@ -399,10 +383,7 @@ export default function Shipments() {
         .footer-badge:hover { border-color: var(--page-accent); color: var(--page-accent); }
       `}</style>
 
-      
-
       {/* ════ HERO ════ */}
-      {/* ✏️ EDIT: hero-tag text, h1 words, subtitle words */}
       <section style={{ position:'relative', zIndex:1, width:'100%' }}>
         <div className="hero-wrap">
           <div className="hero-tag">
@@ -411,30 +392,32 @@ export default function Shipments() {
 
           <h1 className="hero-h1">
             <div className="blur-line">
-              {/* ✏️ EDIT: change these words */}
               {['Every', 'Route.'].map((w, i) => (
                 <span key={w} className="blur-word" style={{ animationDelay:`${0.12 + i*0.09}s` }}>{w}</span>
               ))}
             </div>
             <div className="blur-line" style={{ color:'var(--page-accent)' }}>
-              {/* ✏️ EDIT: change these accent words */}
               {['Every', 'Shipment.'].map((w, i) => (
                 <span key={w} className="blur-word" style={{ animationDelay:`${0.3 + i*0.11}s` }}>{w}</span>
               ))}
             </div>
           </h1>
 
-          <p className="hero-sub">
-            {/* ✏️ EDIT: change subtitle words */}
-            {['6 shipments', 'across', '3 lanes', 'visualised', 'on', 'an', 'interactive', '3D', 'globe', 'with', 'live', 'arc', 'routes.'].map((w, i) => (
-              <span key={i} className="blur-word-sub" style={{ animationDelay:`${0.5 + i*0.04}s`, marginRight:'0.3em' }}>{w}</span>
-            ))}
+          {/*
+            FIX: Subtitle as a single animated element instead of 13
+            individual blur-word spans. This removes 13 compositing layers
+            that were being created and animated simultaneously.
+          */}
+          <p className="hero-sub" style={{
+            opacity: 0,
+            animation: 'fadeSlideUp 0.65s cubic-bezier(0.22,1,0.36,1) 0.5s forwards'
+          }}>
+            6 shipments across 3 lanes visualised on an interactive 3D globe with live arc routes.
           </p>
         </div>
       </section>
 
       {/* ════ MARQUEE ════ */}
-      {/* ✏️ EDIT: change the marquee words */}
       <div className="marquee-wrap">
         <div className="marquee-track">
           {['Route Visibility','Mumbai · Pune · Delhi','Load Consolidation','3 Active Trucks','OR-Tools MIP','6 Shipments','4,100 kg Load','76% Utilization','Colour-Coded Groups','LangGraph Agents','Live Globe Map','Time Windows'].flatMap((t,i) => [
@@ -450,7 +433,6 @@ export default function Shipments() {
       </div>
 
       {/* ════ STATS ════ */}
-      {/* ✏️ EDIT: stat values are in the STATS array at the top of the file */}
       <div className="stats-grid" ref={statsRef} style={{ opacity: statsVisible ? 1 : 0, transform: statsVisible ? 'translateY(0)' : 'translateY(28px)', transition: 'opacity 0.7s cubic-bezier(0.22,1,0.36,1), transform 0.7s cubic-bezier(0.22,1,0.36,1)' }}>
         {STATS.map(({ label, suffix, prefix }, i) => (
           <div key={label} className="stat-cell">
@@ -464,8 +446,6 @@ export default function Shipments() {
       {/* ════ MAIN CONTENT ════ */}
       <div style={{ position:'relative', zIndex:1 }}>
 
-        {/* Section divider */}
-        {/* ✏️ EDIT: section label */}
         <div className="section-divider">
           <span className="section-divider-label">— Route map · shipment table</span>
           <div className="section-divider-line" />
@@ -474,7 +454,6 @@ export default function Shipments() {
         <div className="page-body">
 
           {/* ── Lane filter pills ── */}
-          {/* ✏️ EDIT: LANES array at the top controls these */}
           <div style={{ display:'flex', gap:'0.6rem', flexWrap:'wrap', marginBottom:'1.5rem' }}>
             {laneList.map(lane => (
               <button key={lane} className={`filter-pill${filter === lane ? ' active' : ''}`}
@@ -484,7 +463,6 @@ export default function Shipments() {
           </div>
 
           {/* ════ GLOBE MAP ════ */}
-          {/* ✏️ EDIT: globe config is inside the GlobeMap component above (camera, rotate speed, textures) */}
           <div className="globe-card">
             <div className="globe-header">
               <span style={{ fontSize:'0.68rem', fontFamily:"'JetBrains Mono',monospace", color:'var(--text-muted)', textTransform:'uppercase', letterSpacing:'0.12em' }}>
@@ -494,14 +472,12 @@ export default function Shipments() {
                 <span style={{ fontSize:'0.65rem', fontFamily:"'JetBrains Mono',monospace", color:'var(--page-accent)' }}>
                   ● Drag to rotate · Scroll to zoom
                 </span>
-                {/* ✏️ EDIT: change this badge label */}
                 <span style={{ fontSize:'0.65rem', padding:'2px 8px', borderRadius:5, fontFamily:"'JetBrains Mono',monospace", background:'rgba(var(--page-glow-rgb),0.1)', border:'1px solid rgba(var(--page-glow-rgb),0.3)', color:'var(--page-accent)' }}>Live</span>
               </div>
             </div>
 
             <GlobeMap filter={filter} />
 
-            {/* ✏️ EDIT: legend entries match ARCS array */}
             <div className="globe-legend">
               {ARCS.map(a => (
                 <div key={a.label} style={{ display:'flex', alignItems:'center', gap:8, fontSize:'0.65rem', fontFamily:"'JetBrains Mono',monospace", color:'var(--text-muted)' }}>
@@ -516,7 +492,6 @@ export default function Shipments() {
           <div className="content-grid">
 
             {/* TABLE */}
-            {/* ✏️ EDIT: columns in <thead>, rows driven by SHIPMENTS array above */}
             <div className="table-card">
               <div style={{ padding:'1.1rem 1.5rem', borderBottom:'1px solid var(--border)', display:'flex', alignItems:'center', justifyContent:'space-between' }}>
                 <span style={{ fontSize:'0.68rem', fontFamily:"'JetBrains Mono',monospace", color:'var(--text-muted)', textTransform:'uppercase', letterSpacing:'0.12em' }}>
@@ -527,7 +502,6 @@ export default function Shipments() {
               <table>
                 <thead>
                   <tr>
-                    {/* ✏️ EDIT: table column headers */}
                     {['ID','Route','Weight','Priority','Window','Status','Truck'].map(h => (
                       <th key={h}>{h}</th>
                     ))}
@@ -565,7 +539,7 @@ export default function Shipments() {
             {/* SIDEBAR */}
             <div>
 
-              {/* Shipment detail drawer — appears on row click */}
+              {/* Shipment detail drawer */}
               {selShipment && (
                 <div className="sidebar-card" style={{ borderColor:`${selShipment._color || GROUP_COLORS[selShipment.group] || '#6b7280'}44`, animation:'fadeSlideUp 0.3s ease forwards' }}>
                   <div className="sidebar-card-header">
@@ -576,7 +550,6 @@ export default function Shipments() {
                     >✕</button>
                   </div>
                   <div className="sidebar-card-body">
-                    {/* ✏️ EDIT: detail rows — add/remove as needed */}
                     {[
                       ['Route',    `${selShipment.origin} → ${selShipment.dest}`],
                       ['Weight',   `${selShipment.weight} kg`],
@@ -613,7 +586,6 @@ export default function Shipments() {
               )}
 
               {/* Fleet utilization cards */}
-              {/* ✏️ EDIT: driven by TRUCKS array at the top */}
               <div className="sidebar-card">
                 <div className="sidebar-card-header">
                   <span style={{ fontSize:'0.68rem', fontFamily:"'JetBrains Mono',monospace", color:'var(--text-muted)', textTransform:'uppercase', letterSpacing:'0.12em' }}>/ fleet utilization</span>

@@ -5,7 +5,6 @@ import { Zap } from 'lucide-react'
 import { DEMO_METRICS } from '@/data/demoData'
 import PageShell from '@/components/layout/PageShell'
 
-
 /* ── Animated counter hook ── */
 function useCounter(target, duration = 1800, start = false) {
   const [val, setVal] = useState(0)
@@ -32,13 +31,9 @@ const STATS = [
 ]
 
 const FEATURE_ICONS = [
-  /* Engine — lightning bolt */
   <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="var(--page-accent)" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>,
-  /* Intelligence — brain/bulb */
   <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="var(--page-accent)" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="8" r="5"/><path d="M9 13v2a3 3 0 0 0 6 0v-2"/><line x1="9" y1="17" x2="15" y2="17"/><line x1="12" y1="19" x2="12" y2="21"/><path d="M7 8a5 5 0 0 1 5-5"/><path d="M12 3a5 5 0 0 1 5 5"/></svg>,
-  /* Scenarios — bar chart */
   <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="var(--page-accent)" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/><line x1="2" y1="20" x2="22" y2="20"/></svg>,
-  /* Visibility — map pin */
   <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="var(--page-accent)" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z"/><circle cx="12" cy="9" r="2.5"/></svg>,
 ]
 
@@ -77,56 +72,66 @@ const FEATURES = [
   },
 ]
 
+/* ─────────────────────────────────────────────────────────────
+   FIX 1: All globe-related constants and HomeGlobeMap MOVED
+   OUTSIDE the Home component. When they were defined inside,
+   every state change (e.g. statsVisible flipping to true) caused
+   React to see HomeGlobeMap as a brand-new component type and
+   fully unmount + remount it — re-importing globe.gl and
+   rebuilding the THREE.js scene on every render.
+───────────────────────────────────────────────────────────── */
+const HOME_ARCS = [
+  { startLat:19.076,  startLng:72.8777, endLat:18.5204, endLng:73.8567, color:'#f59e0b', label:'G1 · V001 · Mumbai→Pune' },
+  { startLat:18.5204, startLng:73.8567, endLat:28.6139, endLng:77.209,  color:'#10b981', label:'G2 · V004 · Pune→Delhi'  },
+  { startLat:19.076,  startLng:72.8777, endLat:28.6139, endLng:77.209,  color:'#06b6d4', label:'G3 · V003 · Mumbai→Delhi' },
+]
+const HOME_CITIES = {
+  Mumbai: { lat:19.076,  lng:72.8777, color:'#f59e0b' },
+  Pune:   { lat:18.5204, lng:73.8567, color:'#10b981' },
+  Delhi:  { lat:28.6139, lng:77.209,  color:'#06b6d4' },
+}
+function homeHexToRgb(hex) {
+  return `${parseInt(hex.slice(1,3),16)},${parseInt(hex.slice(3,5),16)},${parseInt(hex.slice(5,7),16)}`
+}
+
+function HomeGlobeMap() {
+  const containerRef = useRef(null)
+  useEffect(() => {
+    if (!containerRef.current) return
+    let cancelled = false
+    import('globe.gl').then(({ default: Globe }) => {
+      if (cancelled || !containerRef.current) return
+      containerRef.current.innerHTML = ''
+      const cityPoints = Object.entries(HOME_CITIES).map(([name, c]) => ({ name, ...c }))
+      const g = Globe({ animateIn: true })(containerRef.current)
+        .globeImageUrl('//unpkg.com/three-globe/example/img/earth-dark.jpg')
+        .backgroundImageUrl('//unpkg.com/three-globe/example/img/night-sky.png')
+        .width(containerRef.current.offsetWidth || 500)
+        .height(220)
+        .pointOfView({ lat:22, lng:78, altitude:1.8 }, 0)
+        .arcsData(HOME_ARCS)
+        .arcStartLat(d=>d.startLat).arcStartLng(d=>d.startLng)
+        .arcEndLat(d=>d.endLat).arcEndLng(d=>d.endLng)
+        .arcColor(d=>[d.color,d.color])
+        .arcAltitude(0.25).arcStroke(1.2)
+        .arcDashLength(0.4).arcDashGap(0.15).arcDashAnimateTime(2200)
+        .pointsData(cityPoints)
+        .pointLat(d=>d.lat).pointLng(d=>d.lng)
+        .pointColor(d=>d.color).pointAltitude(0.01).pointRadius(0.5)
+        .ringsData(cityPoints)
+        .ringLat(d=>d.lat).ringLng(d=>d.lng)
+        .ringColor(d=>t=>`rgba(${homeHexToRgb(d.color)},${1-t})`)
+        .ringMaxRadius(3).ringPropagationSpeed(1.5).ringRepeatPeriod(1500)
+      g.controls().autoRotate = true
+      g.controls().autoRotateSpeed = 0.5
+      g.controls().enableZoom = false
+    }).catch(()=>{})
+    return () => { cancelled = true }
+  }, []) // empty — init once, never re-mount
+  return <div ref={containerRef} style={{ width:'100%', height:'220px', background:'#060609', borderRadius:10 }} />
+}
+
 export default function Home() {
-    const HOME_ARCS = [
-    { startLat:19.076,  startLng:72.8777, endLat:18.5204, endLng:73.8567, color:'#f59e0b', label:'G1 · V001 · Mumbai→Pune' },
-    { startLat:18.5204, startLng:73.8567, endLat:28.6139, endLng:77.209,  color:'#10b981', label:'G2 · V004 · Pune→Delhi'  },
-    { startLat:19.076,  startLng:72.8777, endLat:28.6139, endLng:77.209,  color:'#06b6d4', label:'G3 · V003 · Mumbai→Delhi' },
-  ]
-  const HOME_CITIES = {
-    Mumbai: { lat:19.076,  lng:72.8777, color:'#f59e0b' },
-    Pune:   { lat:18.5204, lng:73.8567, color:'#10b981' },
-    Delhi:  { lat:28.6139, lng:77.209,  color:'#06b6d4' },
-  }
-  function homeHexToRgb(hex) {
-    return `${parseInt(hex.slice(1,3),16)},${parseInt(hex.slice(3,5),16)},${parseInt(hex.slice(5,7),16)}`
-  }
-  function HomeGlobeMap() {
-    const containerRef = useRef(null)
-    useEffect(() => {
-      if (!containerRef.current) return
-      let cancelled = false
-      import('globe.gl').then(({ default: Globe }) => {
-        if (cancelled || !containerRef.current) return
-        containerRef.current.innerHTML = ''
-        const cityPoints = Object.entries(HOME_CITIES).map(([name, c]) => ({ name, ...c }))
-        const g = Globe({ animateIn: true })(containerRef.current)
-          .globeImageUrl('//unpkg.com/three-globe/example/img/earth-dark.jpg')
-          .backgroundImageUrl('//unpkg.com/three-globe/example/img/night-sky.png')
-          .width(containerRef.current.offsetWidth || 500)
-          .height(220)
-          .pointOfView({ lat:22, lng:78, altitude:1.8 }, 0)
-          .arcsData(HOME_ARCS)
-          .arcStartLat(d=>d.startLat).arcStartLng(d=>d.startLng)
-          .arcEndLat(d=>d.endLat).arcEndLng(d=>d.endLng)
-          .arcColor(d=>[d.color,d.color])
-          .arcAltitude(0.25).arcStroke(1.2)
-          .arcDashLength(0.4).arcDashGap(0.15).arcDashAnimateTime(2200)
-          .pointsData(cityPoints)
-          .pointLat(d=>d.lat).pointLng(d=>d.lng)
-          .pointColor(d=>d.color).pointAltitude(0.01).pointRadius(0.5)
-          .ringsData(cityPoints)
-          .ringLat(d=>d.lat).ringLng(d=>d.lng)
-          .ringColor(d=>t=>`rgba(${homeHexToRgb(d.color)},${1-t})`)
-          .ringMaxRadius(3).ringPropagationSpeed(1.5).ringRepeatPeriod(1500)
-        g.controls().autoRotate = true
-        g.controls().autoRotateSpeed = 0.5
-        g.controls().enableZoom = false
-      }).catch(()=>{})
-      return () => { cancelled = true }
-    }, [])
-    return <div ref={containerRef} style={{ width:'100%', height:'220px', background:'#060609', borderRadius:10 }} />
-  }
   const nav = useNavigate()
   const statsRef = useRef(null)
   const [statsVisible, setStatsVisible] = useState(false)
@@ -146,227 +151,221 @@ export default function Home() {
   return (
     <PageShell>
       <style>{`
-        /* ─── Features alternating ─── */
-        .features-wrap {
-          padding: 0 3rem 5rem;
-          display: flex;
-          flex-direction: column;
-          gap: 0;
-        }
-        .feature-row {
-          display: grid;
-          grid-template-columns: 1fr 1fr;
-          gap: 4rem;
-          padding: 4rem 0;
-          border-bottom: 1px solid var(--border);
-          align-items: center;
-        }
-        .feature-row:last-child { border-bottom: none; }
-        .feature-row.reverse .feature-text { order: 2; }
-        .feature-row.reverse .feature-visual { order: 1; }
-        .feature-num {
-          font-family: 'JetBrains Mono', monospace;
-          font-size: 0.68rem;
-          color: var(--page-accent);
-          letter-spacing: 0.12em;
-          margin-bottom: 0.5rem;
-          display: flex;
-          align-items: center;
-          gap: 0.75rem;
-        }
-        .feature-num::after {
-          content: '';
-          flex: 0 0 40px;
-          height: 1px;
-          background: var(--page-accent);
-          opacity: 0.4;
-        }
-        .feature-tag {
-          font-size: 0.68rem;
-          padding: 2px 8px;
-          border-radius: 5px;
-          border: 1px solid rgba(var(--page-glow-rgb), 0.35);
-          color: var(--page-accent);
-          background: rgba(var(--page-glow-rgb), 0.1);
-          font-family: 'JetBrains Mono', monospace;
-          text-transform: uppercase;
-          letter-spacing: 0.08em;
-          display: inline-block;
-          margin-bottom: 1rem;
-        }
-        /* ─── CHANGE 4: bigger text in features section ─── */
-        .feature-title {
-          font-family: 'Syne', sans-serif;
-          font-size: 2rem;
-          font-weight: 800;
-          line-height: 1.15;
-          letter-spacing: -0.02em;
-          margin-bottom: 1rem;
-        }
-        .feature-desc {
-          font-size: 1rem;
-          color: var(--text-secondary);
-          line-height: 1.75;
-          margin-bottom: 1.5rem;
-        }
-        .feature-bullets {
-          display: flex;
-          flex-direction: column;
-          gap: 0.5rem;
-          margin-bottom: 1.8rem;
-        }
-        .feature-bullet {
-          display: flex;
-          align-items: center;
-          gap: 0.6rem;
-          font-size: 0.92rem;
-          color: var(--text-muted);
-        }
-        .feature-bullet::before {
-          content: '';
-          width: 5px; height: 5px;
-          border-radius: 50%;
-          background: var(--page-accent);
-          flex-shrink: 0;
-          box-shadow: 0 0 6px var(--page-accent);
-        }
-        .feature-link {
-          display: inline-flex;
-          align-items: center;
-          gap: 6px;
-          font-size: 0.9rem;
-          font-weight: 600;
-          color: var(--page-accent);
-          cursor: pointer;
-          padding: 5px 14px;
-          border-radius: 9999px;
-          border: 1px solid rgba(var(--page-glow-rgb), 0.45);
-          background: rgba(var(--page-glow-rgb), 0.1);
-          font-family: 'JetBrains Mono', monospace;
-          letter-spacing: 0.08em;
-          text-transform: uppercase;
-          font-size: 0.72rem;
-          transition: all 0.3s ease;
-        }
-        .feature-link:hover {
-          background: rgba(var(--page-glow-rgb), 0.28);
-          border-color: var(--page-accent);
-          box-shadow: 0 0 20px rgba(var(--page-glow-rgb), 0.45),
-                      0 0 50px rgba(var(--page-glow-rgb), 0.15);
-          transform: scale(1.05);
-        }
-
-        /* ─── Feature visual card ─── */
-        .feature-visual {
-          background: var(--card);
-          border: 1px solid var(--border);
-          border-radius: 18px;
-          padding: 2rem;
-          min-height: 260px;
-          display: flex;
-          flex-direction: column;
-          justify-content: space-between;
-          position: relative;
-          overflow: hidden;
-          transition: border-color 0.3s, box-shadow 0.3s;
-        }
-        .feature-row:hover .feature-visual {
-          border-color: rgba(var(--page-glow-rgb), 0.4);
-          box-shadow: 0 0 40px rgba(var(--page-glow-rgb), 0.1);
-        }
-        .feature-visual::before {
-          content: '';
-          position: absolute;
-          top: -40%; right: -20%;
-          width: 200px; height: 200px;
-          border-radius: 50%;
-          background: radial-gradient(circle, rgba(var(--page-glow-rgb), 0.2), transparent 70%);
-          pointer-events: none;
-        }
-        .visual-label {
-          font-size: 0.65rem;
-          font-family: 'JetBrains Mono', monospace;
-          color: var(--text-muted);
-          text-transform: uppercase;
-          letter-spacing: 0.12em;
-          margin-bottom: 1.2rem;
-        }
-        .visual-metric-row {
-          display: flex;
-          gap: 1rem;
-          margin-bottom: 1rem;
-        }
-        .visual-metric {
-          flex: 1;
-          background: rgba(var(--page-glow-rgb), 0.08);
-          border: 1px solid rgba(var(--page-glow-rgb), 0.15);
-          border-radius: 10px;
-          padding: 0.75rem 1rem;
-        }
-        .visual-metric-val {
-          font-family: 'Syne', sans-serif;
-          font-size: 1.4rem;
-          font-weight: 800;
-          color: var(--page-accent);
-          line-height: 1;
-        }
-        .visual-metric-lbl {
-          font-size: 0.65rem;
-          color: var(--text-muted);
-          font-family: 'JetBrains Mono', monospace;
-          margin-top: 3px;
-          text-transform: uppercase;
-          letter-spacing: 0.08em;
-        }
-        .visual-bar-wrap {
-          background: rgba(255,255,255,0.05);
-          border-radius: 9999px;
-          height: 6px;
-          overflow: hidden;
-          margin-top: 0.5rem;
-        }
-        .visual-bar {
-          height: 100%;
-          border-radius: 9999px;
-          background: linear-gradient(90deg, rgba(var(--page-glow-rgb),1), var(--page-accent));
-        }
-
-        /* ─── Bottom CTA ─── */
-        .cta-section {
-          border-top: 1px solid var(--border);
-          position: relative;
-          z-index: 1;
-          overflow: hidden;
-        }
-        .cta-inner {
-          padding: 6rem 3rem;
-          text-align: center;
-          position: relative;
-        }
-        .cta-glow {
-          position: absolute;
-          top: 50%; left: 50%;
-          transform: translate(-50%, -50%);
-          width: 600px; height: 300px;
-          border-radius: 50%;
-          background: radial-gradient(ellipse, rgba(var(--page-glow-rgb), 0.25) 0%, transparent 70%);
-          pointer-events: none;
-        }
-        .cta-h2 {
-          font-family: 'Syne', sans-serif;
-          font-size: clamp(2rem, 4vw, 3.5rem);
-          font-weight: 800;
-          letter-spacing: -0.025em;
-          line-height: 1.1;
-          margin-bottom: 1rem;
-          position: relative;
-        }
-        .cta-sub {
-          font-size: 1rem;
-          color: var(--text-secondary);
-          margin-bottom: 2.5rem;
-          position: relative;
-        }
+      .hero-wrap { position: relative; }
+      .features-wrap {
+        padding: 0 3rem 5rem;
+        display: flex;
+        flex-direction: column;
+        gap: 0;
+      }
+      .feature-row {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 4rem;
+        padding: 4rem 0;
+        border-bottom: 1px solid var(--border);
+        align-items: center;
+      }
+      .feature-row:last-child { border-bottom: none; }
+      .feature-row.reverse .feature-text { order: 2; }
+      .feature-row.reverse .feature-visual { order: 1; }
+      .feature-num {
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 0.68rem;
+        color: var(--page-accent);
+        letter-spacing: 0.12em;
+        margin-bottom: 0.5rem;
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+      }
+      .feature-num::after {
+        content: '';
+        flex: 0 0 40px;
+        height: 1px;
+        background: var(--page-accent);
+        opacity: 0.4;
+      }
+      .feature-tag {
+        font-size: 0.68rem;
+        padding: 2px 8px;
+        border-radius: 5px;
+        border: 1px solid rgba(var(--page-glow-rgb), 0.35);
+        color: var(--page-accent);
+        background: rgba(var(--page-glow-rgb), 0.1);
+        font-family: 'JetBrains Mono', monospace;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        display: inline-block;
+        margin-bottom: 1rem;
+      }
+      .feature-title {
+        font-family: 'Syne', sans-serif;
+        font-size: 2rem;
+        font-weight: 800;
+        line-height: 1.15;
+        letter-spacing: -0.02em;
+        margin-bottom: 1rem;
+      }
+      .feature-desc {
+        font-size: 1rem;
+        color: var(--text-secondary);
+        line-height: 1.75;
+        margin-bottom: 1.5rem;
+      }
+      .feature-bullets {
+        display: flex;
+        flex-direction: column;
+        gap: 0.5rem;
+        margin-bottom: 1.8rem;
+      }
+      .feature-bullet {
+        display: flex;
+        align-items: center;
+        gap: 0.6rem;
+        font-size: 0.92rem;
+        color: var(--text-muted);
+      }
+      .feature-bullet::before {
+        content: '';
+        width: 5px; height: 5px;
+        border-radius: 50%;
+        background: var(--page-accent);
+        flex-shrink: 0;
+        box-shadow: 0 0 6px var(--page-accent);
+      }
+      .feature-link {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 0.72rem;
+        font-weight: 600;
+        color: var(--page-accent);
+        cursor: pointer;
+        padding: 5px 14px;
+        border-radius: 9999px;
+        border: 1px solid rgba(var(--page-glow-rgb), 0.45);
+        background: rgba(var(--page-glow-rgb), 0.1);
+        font-family: 'JetBrains Mono', monospace;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        transition: all 0.3s ease;
+      }
+      .feature-link:hover {
+        background: rgba(var(--page-glow-rgb), 0.28);
+        border-color: var(--page-accent);
+        box-shadow: 0 0 20px rgba(var(--page-glow-rgb), 0.45),
+                    0 0 50px rgba(var(--page-glow-rgb), 0.15);
+        transform: scale(1.05);
+      }
+      .feature-visual {
+        background: var(--card);
+        border: 1px solid var(--border);
+        border-radius: 18px;
+        padding: 2rem;
+        min-height: 260px;
+        display: flex;
+        flex-direction: column;
+        justify-content: space-between;
+        position: relative;
+        overflow: hidden;
+        transition: border-color 0.3s, box-shadow 0.3s;
+      }
+      .feature-row:hover .feature-visual {
+        border-color: rgba(var(--page-glow-rgb), 0.4);
+        box-shadow: 0 0 40px rgba(var(--page-glow-rgb), 0.1);
+      }
+      .feature-visual::before {
+        content: '';
+        position: absolute;
+        top: -40%; right: -20%;
+        width: 200px; height: 200px;
+        border-radius: 50%;
+        background: radial-gradient(circle, rgba(var(--page-glow-rgb), 0.2), transparent 70%);
+        pointer-events: none;
+      }
+      .visual-label {
+        font-size: 0.65rem;
+        font-family: 'JetBrains Mono', monospace;
+        color: var(--text-muted);
+        text-transform: uppercase;
+        letter-spacing: 0.12em;
+        margin-bottom: 1.2rem;
+      }
+      .visual-metric-row {
+        display: flex;
+        gap: 1rem;
+        margin-bottom: 1rem;
+      }
+      .visual-metric {
+        flex: 1;
+        background: rgba(var(--page-glow-rgb), 0.08);
+        border: 1px solid rgba(var(--page-glow-rgb), 0.15);
+        border-radius: 10px;
+        padding: 0.75rem 1rem;
+      }
+      .visual-metric-val {
+        font-family: 'Syne', sans-serif;
+        font-size: 1.4rem;
+        font-weight: 800;
+        color: var(--page-accent);
+        line-height: 1;
+      }
+      .visual-metric-lbl {
+        font-size: 0.65rem;
+        color: var(--text-muted);
+        font-family: 'JetBrains Mono', monospace;
+        margin-top: 3px;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+      }
+      .visual-bar-wrap {
+        background: rgba(255,255,255,0.05);
+        border-radius: 9999px;
+        height: 6px;
+        overflow: hidden;
+        margin-top: 0.5rem;
+      }
+      .visual-bar {
+        height: 100%;
+        border-radius: 9999px;
+        background: linear-gradient(90deg, rgba(var(--page-glow-rgb),1), var(--page-accent));
+      }
+      .cta-section {
+        border-top: 1px solid var(--border);
+        position: relative;
+        z-index: 1;
+        overflow: hidden;
+      }
+      .cta-inner {
+        padding: 6rem 3rem;
+        text-align: center;
+        position: relative;
+      }
+      .cta-glow {
+        position: absolute;
+        top: 50%; left: 50%;
+        transform: translate(-50%, -50%);
+        width: 600px; height: 300px;
+        border-radius: 50%;
+        background: radial-gradient(ellipse, rgba(var(--page-glow-rgb), 0.25) 0%, transparent 70%);
+        pointer-events: none;
+      }
+      .cta-h2 {
+        font-family: 'Syne', sans-serif;
+        font-size: clamp(2rem, 4vw, 3.5rem);
+        font-weight: 800;
+        letter-spacing: -0.025em;
+        line-height: 1.1;
+        margin-bottom: 1rem;
+        position: relative;
+      }
+      .cta-sub {
+        font-size: 1rem;
+        color: var(--text-secondary);
+        margin-bottom: 2.5rem;
+        position: relative;
+      }
       `}</style>
 
       {/* ════ HERO ════ */}
@@ -390,10 +389,16 @@ export default function Home() {
             </div>
           </h1>
 
-          <p className="hero-sub">
-            {['Lorri','uses','OR Tools','+','LangGraph','agents','to','consolidate','your','shipments','cutting','trips,','costs,','and','carbon','in','seconds.'].map((w, i) => (
-              <span key={i} className="blur-word-sub" style={{ animationDelay: `${0.65 + i * 0.042}s`, marginRight: '0.3em' }}>{w}</span>
-            ))}
+          {/*
+            FIX 2: Subtitle animated as a single element instead of 17
+            individual <span> elements each with filter:blur(). The
+            per-word approach created 17 simultaneous compositing layers.
+          */}
+          <p className="hero-sub" style={{
+            opacity: 0,
+            animation: 'fadeSlideUp 0.65s cubic-bezier(0.22,1,0.36,1) 0.65s forwards'
+          }}>
+            Lorri uses OR Tools + LangGraph agents to consolidate your shipments cutting trips, costs, and carbon in seconds.
           </p>
 
           <div className="hero-cta-row">
@@ -429,7 +434,7 @@ export default function Home() {
       </div>
 
       {/* ════ STATS ════ */}
-      <div className="stats-grid" ref={statsRef}>
+      <div className="stats-grid" ref={statsRef} style={{ opacity: statsVisible ? 1 : 0, transform: statsVisible ? 'translateY(0)' : 'translateY(28px)', transition: 'opacity 0.7s cubic-bezier(0.22,1,0.36,1), transform 0.7s cubic-bezier(0.22,1,0.36,1)' }}>
         {STATS.map(({ label, raw, suffix, prefix }, i) => (
           <div key={label} className="stat-cell">
             <div className="stat-num">
@@ -466,7 +471,6 @@ export default function Home() {
                     <div key={b} className="feature-bullet">{b}</div>
                   ))}
                 </div>
-                {/* CHANGE 3: text matches navbar order */}
                 <span className="feature-link" onClick={() => nav(f.to)}>
                   <span style={{ display:'flex', alignItems:'center' }}>{FEATURE_ICONS[idx]}</span>
                   {['Optimize','Insights','Scenarios','Shipments'][idx]} →
