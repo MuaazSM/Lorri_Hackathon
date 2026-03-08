@@ -107,6 +107,8 @@ Lorri AI addresses every requirement from the LogisticsNow problem statement —
 
 ## 🏗️ System Architecture
 
+![System Architecture](architecture-diagram.png)
+
 Lorri AI is built as a **three-layer intelligence system** where each layer amplifies the others:
 
 ```
@@ -164,6 +166,8 @@ No single layer could do this alone. **The magic is in their orchestration.**
 ---
 
 ## 🤖 The Agent Loop
+
+![User Flow](user-flow.png)
 
 Lorri AI follows the **Observe → Reason → Decide → Act → Learn** framework, implemented as a LangGraph state graph with typed state, conditional edges, and retry loops.
 
