@@ -13,20 +13,21 @@
 
 **The Jugaadus** · Built for Hackathon
 
-[Live Demo](#live-demo) · [Architecture](#system-architecture) · [Quick Start](#quick-start) · [API Docs](#api-endpoints) · [Benchmarks](#benchmark-results)
-
+[Live Demo](#-live-demo) · [Presentation](#-presentation) · [Architecture](#system-architecture) · [Quick Start](#quick-start) · [API Docs](#api-endpoints) · [Benchmarks](#benchmark-results)
 
 ---
 
-## � Live Demo
-
-https://github.com/user-attachments/assets/demo.mp4
+## 🎬 Live Demo
 
 <video src="demo.mp4" controls width="100%"></video>
 
+## 📑 Presentation
+
+[📄 View the Lorri AI Pitch Deck (PDF)](LogisticsNow%20Hackathon.pdf)
+
 ---
 
-## �🎯 The Problem
+## � The Problem
 
 > **LogisticsNow Problem Statement #5 — AI Load Consolidation Optimization Engine**
 
