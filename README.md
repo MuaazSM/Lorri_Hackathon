@@ -18,7 +18,15 @@
 
 ---
 
-## 🎯 The Problem
+## � Live Demo
+
+https://github.com/user-attachments/assets/demo.mp4
+
+<video src="demo.mp4" controls width="100%"></video>
+
+---
+
+## �🎯 The Problem
 
 > **LogisticsNow Problem Statement #5 — AI Load Consolidation Optimization Engine**
 
