@@ -44,6 +44,8 @@ from backend.app.agents.tools.optimization_tool import run_optimization
 from backend.app.agents.tools.outcome_logging_tool import log_outcome, trigger_retraining
 from backend.app.optimizer.metrics import compute_full_metrics
 from backend.app.optimizer.route_optimizer import optimize_all_routes
+from backend.app.optimizer.sensitivity import run_sensitivity_analysis
+from backend.app.optimizer.warehouse_queue import analyze_warehouse_congestion
 # ---------------------------------------------------------------------------
 # AgentState — the typed state that flows through the entire graph
 # ---------------------------------------------------------------------------
@@ -70,6 +72,7 @@ class AgentState(TypedDict):
         scenario_results: raw output from 4 simulation scenarios
         scenario_analysis: Agent 4's recommendations and trade-offs
         insights: Agent 2's lane insights, risk flags, narrative
+        sensitivity_analysis: post-optimization sensitivity recommendations
         metrics: before/after operational metrics (Learn)
 
         retry_count: how many times the solver has been retried after infeasibility
@@ -87,6 +90,9 @@ class AgentState(TypedDict):
     # --- Reason phase ---
     compatibility_scores: Optional[Dict]
 
+    # --- Queue analysis ---
+    queue_analysis: Optional[Dict]
+
     # --- Decide phase ---
     guardrail_result: Optional[Dict]
 
@@ -99,6 +105,9 @@ class AgentState(TypedDict):
     scenario_results: Optional[List[Dict]]
     scenario_analysis: Optional[Dict]
     insights: Optional[Dict]
+
+    # --- Sensitivity analysis ---
+    sensitivity_analysis: Optional[Dict]
 
     # --- Learn phase ---
     metrics: Optional[Dict]
@@ -276,6 +285,42 @@ def compatibility_node(state: AgentState) -> dict:
 
     return {
         "compatibility_scores": compatibility,
+        "step_timings": state["step_timings"] + [timing],
+    }
+
+
+def queue_analysis_node(state: AgentState) -> dict:
+    """
+    REASON PHASE — Analyze warehouse congestion using M/M/1 queuing model.
+
+    Models each origin warehouse as a queue. Computes arrival rates,
+    utilization, expected wait times. Flags warehouses where truck
+    arrivals would cause loading delays.
+
+    Runs BEFORE the guardrail and solver so congestion warnings are
+    available for downstream decision-making.
+    """
+    start = time.time()
+
+    try:
+        result = analyze_warehouse_congestion(
+            shipments=state["shipments"],
+        )
+        status = "completed"
+        error = None
+
+    except Exception as e:
+        result = {"warehouses": [], "congested_count": 0, "recommendations": []}
+        status = "failed"
+        error = str(e)
+        print(f"[Queue Analysis Node] Failed: {e}")
+
+    duration = (time.time() - start) * 1000
+    timing = {"step": "Queue Analysis", "status": status,
+              "duration_ms": round(duration, 1), "error": error}
+
+    return {
+        "queue_analysis": result,
         "step_timings": state["step_timings"] + [timing],
     }
 
@@ -594,6 +639,66 @@ def scenario_rec_node(state: AgentState) -> dict:
     }
 
 
+def sensitivity_node(state: AgentState) -> dict:
+    """
+    ANALYSIS — Compute sensitivity of the optimal solution.
+
+    Identifies binding constraints, computes shadow prices for fleet
+    expansion and capacity upgrades, and generates recommendations
+    about where to invest for the biggest cost improvement.
+
+    Sits after insight and before scenario recommendation because
+    sensitivity results inform which scenarios are most relevant.
+    """
+    start = time.time()
+
+    try:
+        plan = state.get("consolidation_plan", {})
+        assignments = plan.get("assigned", [])
+        metrics = state.get("metrics")
+
+        # Get original cost from plan or compute it
+        if metrics and metrics.get("after"):
+            original_cost = metrics["after"].get("total_cost", 0)
+        else:
+            from backend.app.optimizer.baseline import compute_baseline
+            baseline = compute_baseline(state["shipments"], state["vehicles"])
+            saving_pct = plan.get("cost_saving_pct", 0)
+            original_cost = baseline["total_cost"] * (1 - saving_pct / 100)
+
+        # Get compatibility graph for solver re-runs
+        graph_object = None
+        compat = state.get("compatibility_scores")
+        if compat:
+            graph_object = compat.get("graph_object")
+
+        result = run_sensitivity_analysis(
+            assignments=assignments,
+            shipments=state["shipments"],
+            vehicles=state["vehicles"],
+            original_cost=original_cost,
+            compatibility_graph=graph_object,
+        )
+
+        status = "completed"
+        error = None
+
+    except Exception as e:
+        result = {"constraint_slack": [], "recommendations": [], "error": str(e)}
+        status = "failed"
+        error = str(e)
+        print(f"[Sensitivity Node] Failed: {e}")
+
+    duration = (time.time() - start) * 1000
+    timing = {"step": "Sensitivity Analysis", "status": status,
+              "duration_ms": round(duration, 1), "error": error}
+
+    return {
+        "sensitivity_analysis": result,
+        "step_timings": state["step_timings"] + [timing],
+    }
+
+
 def metrics_node(state: AgentState) -> dict:
     """
     LEARN PHASE — Compute comprehensive before/after metrics.
@@ -776,9 +881,16 @@ def after_simulation(state: AgentState) -> str:
 
 def after_insight(state: AgentState) -> str:
     """
-    After insight, go to scenario recommendation if we have scenarios.
-    Otherwise skip to metrics.
+    After insight, go to sensitivity if we have a feasible plan, else metrics.
     """
+    plan = state.get("consolidation_plan", {})
+    if plan.get("is_infeasible", False) and len(plan.get("assigned", [])) == 0:
+        return "metrics_node"
+    return "sensitivity_node"
+
+
+def after_sensitivity(state: AgentState) -> str:
+    """After sensitivity, go to scenario rec if scenarios exist, else metrics."""
     if state.get("scenario_results"):
         return "scenario_rec_node"
     return "metrics_node"
@@ -823,12 +935,14 @@ def build_graph() -> StateGraph:
     graph.add_node("shipment_data_node", shipment_data_node)
     graph.add_node("validation_node", validation_node)
     graph.add_node("compatibility_node", compatibility_node)
+    graph.add_node("queue_analysis_node", queue_analysis_node)
     graph.add_node("guardrail_node", guardrail_node)
     graph.add_node("solver_node", solver_node)
     graph.add_node("route_optimization_node", route_optimization_node)
     graph.add_node("relaxation_node", relaxation_node)
     graph.add_node("simulation_node", simulation_node)
     graph.add_node("insight_node", insight_node)
+    graph.add_node("sensitivity_node", sensitivity_node)
     graph.add_node("scenario_rec_node", scenario_rec_node)
     graph.add_node("metrics_node", metrics_node)
     graph.add_node("outcome_logging_node", outcome_logging_node)
@@ -850,8 +964,9 @@ def build_graph() -> StateGraph:
         "compatibility_node": "compatibility_node",
     })
 
-    # After compatibility: always go to guardrail
-    graph.add_edge("compatibility_node", "guardrail_node")
+    # After compatibility: go to queue analysis, then guardrail
+    graph.add_edge("compatibility_node", "queue_analysis_node")
+    graph.add_edge("queue_analysis_node", "guardrail_node")
 
     # After guardrail: loop back to compatibility if violations, else solver
     graph.add_conditional_edges("guardrail_node", after_guardrail, {
@@ -875,8 +990,14 @@ def build_graph() -> StateGraph:
     # After simulation: proceed to insight
     graph.add_edge("simulation_node", "insight_node")
 
-    # After insight: scenario rec if we have scenarios, else metrics
+    # After insight: sensitivity for feasible plans, else metrics
     graph.add_conditional_edges("insight_node", after_insight, {
+        "sensitivity_node": "sensitivity_node",
+        "metrics_node": "metrics_node",
+    })
+
+    # After sensitivity: scenario rec if we have scenarios, else metrics
+    graph.add_conditional_edges("sensitivity_node", after_sensitivity, {
         "scenario_rec_node": "scenario_rec_node",
         "metrics_node": "metrics_node",
     })
@@ -1009,6 +1130,7 @@ def run_pipeline(
         "config": cfg,
         "validation_report": None,
         "compatibility_scores": None,
+        "queue_analysis": None,
         "guardrail_result": None,
         "consolidation_plan": None,
         "constraint_violations": [],
@@ -1016,6 +1138,7 @@ def run_pipeline(
         "scenario_results": None,
         "scenario_analysis": None,
         "insights": None,
+        "sensitivity_analysis": None,
         "metrics": None,
         "retry_count": 0,
         "step_timings": [],
@@ -1034,8 +1157,10 @@ def run_pipeline(
             os.environ["GOOGLE_API_KEY"] = original_key
         return {
             "validation": None, "plan": None, "compatibility": None,
-            "guardrail": None, "insights": None, "relaxation": None,
-            "scenarios": None, "scenario_analysis": None, "metrics": None,
+            "queue_analysis": None, "guardrail": None,
+            "insights": None, "relaxation": None,
+            "scenarios": None, "scenario_analysis": None, "sensitivity": None,
+            "metrics": None,
             "pipeline_metadata": {
                 "steps": [], "total_duration_ms": 0, "retry_count": 0,
                 "config": cfg, "error": str(e),
@@ -1101,11 +1226,13 @@ def run_pipeline(
         "validation": final_state.get("validation_report"),
         "plan": clean_plan,
         "compatibility": clean_compat,
+        "queue_analysis": final_state.get("queue_analysis"),
         "guardrail": clean_guardrail,
         "insights": final_state.get("insights"),
         "relaxation": final_state.get("relaxation"),
         "scenarios": final_state.get("scenario_results"),
         "scenario_analysis": final_state.get("scenario_analysis"),
+        "sensitivity": final_state.get("sensitivity_analysis"),
         "metrics": final_state.get("metrics"),
         "pipeline_metadata": {
             "steps": final_state.get("step_timings", []),

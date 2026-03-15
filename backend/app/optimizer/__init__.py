@@ -60,6 +60,8 @@ from backend.app.agents.tools.optimization_tool import run_optimization as solve
 from backend.app.optimizer.metrics import compute_full_metrics as compute_metrics
 from backend.app.optimizer.baseline import compute_baseline as compute_baseline_metrics
 from backend.app.optimizer.route_optimizer import optimize_all_routes, optimize_truck_route
+from backend.app.optimizer.sensitivity import run_sensitivity_analysis
+from backend.app.optimizer.warehouse_queue import analyze_warehouse_congestion
 
 __all__ = [
     "solve",
@@ -67,4 +69,6 @@ __all__ = [
     "compute_baseline_metrics",
     "optimize_all_routes",
     "optimize_truck_route",
+    "run_sensitivity_analysis",
+    "analyze_warehouse_congestion",
 ]
