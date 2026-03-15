@@ -24,6 +24,28 @@ export const shipmentApi = {
   seed:    (params) => api.post('/dev/seed', null, { params }),
 }
 
+// ── Upload — POST /upload/shipments · POST /upload/vehicles
+export const uploadApi = {
+  shipments: (file, params = {}) => {
+    const formData = new FormData()
+    formData.append('file', file)
+    return axios.post(`${BASE}/upload/shipments`, formData, {
+      params,
+      headers: { 'Content-Type': 'multipart/form-data' },
+      timeout: 60_000,
+    }).then(res => res.data)
+  },
+  vehicles: (file, params = {}) => {
+    const formData = new FormData()
+    formData.append('file', file)
+    return axios.post(`${BASE}/upload/vehicles`, formData, {
+      params,
+      headers: { 'Content-Type': 'multipart/form-data' },
+      timeout: 60_000,
+    }).then(res => res.data)
+  },
+}
+
 // ── Optimize — POST /optimize · GET /plan/{id} ────────────
 export const optimizeApi = {
   run:     (params) => api.post('/optimize', null, { params }),
@@ -38,6 +60,11 @@ export const simulateApi = {
 // ── Metrics — GET /metrics ────────────────────────────────
 export const metricsApi = {
   get:     (planId) => api.get('/metrics', { params: { plan_id: planId } }),
+}
+
+// ── History — GET /history ────────────────────────────────
+export const historyApi = {
+  get:     (limit = 20) => api.get('/history', { params: { limit } }),
 }
 
 export default api

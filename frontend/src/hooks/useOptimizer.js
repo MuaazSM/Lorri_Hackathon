@@ -64,6 +64,8 @@ export default function useOptimizer() {
       avg_utilization: p.avg_utilization,
       cost_saving_pct: p.cost_saving_pct,
       carbon_saving_pct: p.carbon_saving_pct,
+      solver_used: p.solver_used,
+      route_stats: p.route_stats ?? null,
       trucks: (p.assigned || []).map(a => ({
         vehicle_id: a.vehicle_id,
         vehicle_type: a.vehicle_type ?? a.vehicle_id,
@@ -73,6 +75,12 @@ export default function useOptimizer() {
         utilization: a.utilization_pct ?? 0,
         route: a.route ?? '',
         cost: a.cost ?? 0,
+        // New route optimization fields
+        stop_sequence: a.stop_sequence ?? [],
+        optimized_route_km: a.optimized_route_km ?? 0,
+        naive_route_km: a.naive_route_km ?? 0,
+        route_savings_km: a.route_savings_km ?? 0,
+        route_savings_pct: a.route_savings_pct ?? 0,
       })),
     }
   }, [])

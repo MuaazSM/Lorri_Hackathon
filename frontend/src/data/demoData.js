@@ -121,7 +121,13 @@ export const DEMO_INSIGHTS = [
 
 // City coordinates for Leaflet map
 export const CITY_COORDS = {
-  Mumbai: [19.0760, 72.8777],
-  Pune:   [18.5204, 73.8567],
-  Delhi:  [28.7041, 77.1025],
+  Mumbai:    [19.0760, 72.8777],
+  Pune:      [18.5204, 73.8567],
+  Delhi:     [28.7041, 77.1025],
+  Bangalore: [12.9716, 77.5946],
+  Chennai:   [13.0827, 80.2707],
+  Hyderabad: [17.3850, 78.4867],
+  Ahmedabad: [23.0225, 72.5714],
+  Kolkata:   [22.5726, 88.3639],
+  Jaipur:    [26.9124, 75.7873],
 }

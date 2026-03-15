@@ -3,6 +3,9 @@ import { Zap, Loader2 } from 'lucide-react'
 import FoxMascot from '@/components/FoxMascot'
 import ConsolidationPlan from '@/components/ConsolidationPlan'
 import MetricsDashboard from '@/components/MetricsDashboard'
+import RouteStats from '@/components/RouteStats'
+import SensitivityPanel from '@/components/SensitivityPanel'
+import QueuePanel from '@/components/QueuePanel'
 import { useApp } from '@/context/AppContext'
 import { DEMO_PLAN } from '@/data/demoData'
 import PageShell from '@/components/layout/PageShell'
@@ -39,7 +42,7 @@ function useCounter(target, duration = 1800, start = false) {
 }
 
 export default function Optimize() {
-  const { shipments, runFullOptimization, transformPlan, seedData, loadShipments } = useApp()
+  const { shipments, runFullOptimization, transformPlan, seedData, loadShipments, optimizationResult } = useApp()
   const [status,     setStatus]     = useState('idle')
   const [plan,       setPlan]       = useState(null)
   const [activeStep, setActiveStep] = useState(-1)
@@ -403,6 +406,39 @@ export default function Optimize() {
                 </div>
                 <MetricsDashboard metrics={apiMetrics} />
               </div>
+
+              {/* Route Optimization */}
+              {plan.route_stats && (
+                <div style={{ opacity:0, animation:'fadeSlideUp 0.5s ease 0.5s forwards' }}>
+                  <div className="opt-divider">
+                    <span className="opt-divider-label">— Route Optimization · TSP</span>
+                    <div className="opt-divider-line" />
+                  </div>
+                  <RouteStats routeStats={plan.route_stats} trucks={plan.trucks} />
+                </div>
+              )}
+
+              {/* Sensitivity Analysis */}
+              {optimizationResult?.sensitivity && (
+                <div style={{ opacity:0, animation:'fadeSlideUp 0.5s ease 0.65s forwards' }}>
+                  <div className="opt-divider">
+                    <span className="opt-divider-label">— Sensitivity Analysis · Shadow Prices</span>
+                    <div className="opt-divider-line" />
+                  </div>
+                  <SensitivityPanel sensitivity={optimizationResult.sensitivity} />
+                </div>
+              )}
+
+              {/* Warehouse Queue Analysis */}
+              {optimizationResult?.queue_analysis && (
+                <div style={{ opacity:0, animation:'fadeSlideUp 0.5s ease 0.8s forwards' }}>
+                  <div className="opt-divider">
+                    <span className="opt-divider-label">— Warehouse Congestion · M/M/1 Queue</span>
+                    <div className="opt-divider-line" />
+                  </div>
+                  <QueuePanel queueAnalysis={optimizationResult.queue_analysis} />
+                </div>
+              )}
             </>
           ) : (
             <div className="opt-empty">

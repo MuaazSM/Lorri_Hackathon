@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { MapPin } from 'lucide-react'
 import { useApp } from '@/context/AppContext'
 import PageShell from '@/components/layout/PageShell'
+import UploadZone from '@/components/UploadZone'
 
 /* ─────────────────────────────────────────────
    ✏️ EDIT: Shipment & truck data
@@ -164,7 +165,7 @@ export default function Shipments() {
   const nav = useNavigate()
   const [filter,   setFilter]   = useState('All')
   const [selected, setSelected] = useState(null)
-  const { shipments: apiShipments, optimizationResult } = useApp()
+  const { shipments: apiShipments, optimizationResult, loadShipments } = useApp()
   const statsRef = useRef(null)
   const [statsVisible, setStatsVisible] = useState(false)
   useEffect(() => {
@@ -464,6 +465,11 @@ export default function Shipments() {
         </div>
 
         <div className="page-body">
+
+          {/* ── Upload zone ── */}
+          <div style={{ marginBottom: '1.5rem' }}>
+            <UploadZone onUploadComplete={() => loadShipments()} />
+          </div>
 
           {/* ── Lane filter pills ── */}
           <div style={{ display:'flex', gap:'0.6rem', flexWrap:'wrap', marginBottom:'1.5rem' }}>
