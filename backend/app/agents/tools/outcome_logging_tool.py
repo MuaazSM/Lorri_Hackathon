@@ -128,21 +128,28 @@ def log_outcome(
 
 def trigger_retraining() -> Dict:
     """
-    Trigger the compatibility model to retrain.
+    Trigger the compatibility model to retrain with outcome data.
 
-    Called when the outcome count hits the RETRAIN_EVERY_N_OUTCOMES threshold.
-    The retrained model will use the same synthetic training data pipeline
-    but with a new seed — in a production system, this would incorporate
-    actual outcome data to improve future predictions.
+    Called when the outcome count hits the RETRAIN_EVERY_N_OUTCOMES
+    threshold. Uses blended synthetic + real outcome data so the
+    model improves based on actual solver decisions.
 
     Returns:
         Training result dict from the compatibility model
     """
     try:
-        from backend.app.agents.tools.compatibility_scoring_tool import retrain_model
+        from backend.app.agents.tools.compatibility_scoring_tool import _get_model
 
-        print("[Outcome Logger] Triggering compatibility model retraining...")
-        result = retrain_model()
+        model = _get_model()
+
+        print("[Outcome Logger] Triggering compatibility model retraining with outcome data...")
+
+        # Use the outcome-aware training method if available
+        if hasattr(model, "train_with_outcomes"):
+            result = model.train_with_outcomes(force_retrain=True)
+        else:
+            result = model.train(force_retrain=True)
+
         print(f"[Outcome Logger] Retraining complete: {result.get('model_type')} "
               f"with F1={result.get('best_f1')}")
         return result

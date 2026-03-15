@@ -22,6 +22,7 @@ import backend.app.models  # noqa
 
 # Import all route modules
 from backend.app.api.routes import shipments, optimize, plan, simulate, metrics, seed
+from backend.app.api.routes.upload import router as upload_router
 
 app = FastAPI(
     title="Lorri — AI Load Consolidation Engine",
@@ -52,6 +53,7 @@ app.include_router(plan.router, tags=["Plans"])
 app.include_router(simulate.router, tags=["Simulation"])
 app.include_router(metrics.router, tags=["Metrics"])
 app.include_router(seed.router, prefix="/dev", tags=["Dev Tools"])
+app.include_router(upload_router, tags=["Upload"])
 
 
 @app.on_event("startup")
