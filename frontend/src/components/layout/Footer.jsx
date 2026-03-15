@@ -16,10 +16,10 @@ export default function Footer() {
               </div>
               Lorri
             </div>
-            <p className="footer-desc">
+            <div className="footer-desc">
               <p>Lorri ⮕ Logistics Optimization through Reasoning, Routing & Intelligence.</p>
               <p>AI powered load consolidation. Fewer trucks, lower costs, less carbon optimized in seconds using OR Tools and LangGraph.</p>
-            </p>
+            </div>
           </div>
 
         {/* Product */}

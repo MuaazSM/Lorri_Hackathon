@@ -103,6 +103,11 @@ function HomeGlobeMap() {
     // Delay globe init until hero blur animations have finished (~700ms)
     // so WebGL context creation doesn't compete with CSS blur on the GPU
     const timer = setTimeout(() => {
+    const origWarn = console.warn
+    console.warn = (...args) => {
+      if (typeof args[0] === 'string' && args[0].includes('THREE.Clock')) return
+      origWarn.apply(console, args)
+    }
     import('globe.gl').then(({ default: Globe }) => {
       if (cancelled || !containerRef.current) return
       containerRef.current.innerHTML = ''
