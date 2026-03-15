@@ -59,9 +59,12 @@ compute_baseline_metrics(
 from backend.app.agents.tools.optimization_tool import run_optimization as solve
 from backend.app.optimizer.metrics import compute_full_metrics as compute_metrics
 from backend.app.optimizer.baseline import compute_baseline as compute_baseline_metrics
+from backend.app.optimizer.route_optimizer import optimize_all_routes, optimize_truck_route
 
 __all__ = [
     "solve",
     "compute_metrics",
     "compute_baseline_metrics",
+    "optimize_all_routes",
+    "optimize_truck_route",
 ]

@@ -43,7 +43,7 @@ from backend.app.agents.tools.shipment_data_tool import fetch_shipment_data
 from backend.app.agents.tools.optimization_tool import run_optimization
 from backend.app.agents.tools.outcome_logging_tool import log_outcome, trigger_retraining
 from backend.app.optimizer.metrics import compute_full_metrics
-
+from backend.app.optimizer.route_optimizer import optimize_all_routes
 # ---------------------------------------------------------------------------
 # AgentState — the typed state that flows through the entire graph
 # ---------------------------------------------------------------------------
@@ -388,6 +388,54 @@ def solver_node(state: AgentState) -> dict:
         "step_timings": state["step_timings"] + [timing],
     }
 
+def route_optimization_node(state: AgentState) -> dict:
+    """
+    ACT PHASE — Optimize stop sequence for each truck using TSP.
+
+    After the MIP solver assigns shipments to trucks, this node finds
+    the optimal visit order for each truck's stops. Minimizes actual
+    distance traveled within each route.
+
+    Enriches each assignment with optimized_route_km, stop_sequence,
+    and route_savings_km.
+    """
+    start = time.time()
+
+    try:
+        plan = state.get("consolidation_plan", {})
+        assignments = plan.get("assigned", [])
+
+        if not assignments:
+            timing = {"step": "Route Optimizer", "status": "skipped",
+                      "duration_ms": 0, "error": "No assignments to optimize"}
+            return {"step_timings": state["step_timings"] + [timing]}
+
+        enriched_assignments, route_stats = optimize_all_routes(
+            assignments=assignments,
+            shipments=state["shipments"],
+        )
+
+        # Update the plan with route-optimized assignments
+        updated_plan = {**plan, "assigned": enriched_assignments, "route_stats": route_stats}
+
+        status = "completed"
+        error = None
+
+    except Exception as e:
+        updated_plan = state.get("consolidation_plan", {})
+        route_stats = {}
+        status = "failed"
+        error = str(e)
+        print(f"[Route Optimization Node] Failed: {e}")
+
+    duration = (time.time() - start) * 1000
+    timing = {"step": "Route Optimizer", "status": status,
+              "duration_ms": round(duration, 1), "error": error}
+
+    return {
+        "consolidation_plan": updated_plan,
+        "step_timings": state["step_timings"] + [timing],
+    }
 
 def relaxation_node(state: AgentState) -> dict:
     """
@@ -699,7 +747,7 @@ def after_solver(state: AgentState) -> str:
     """
     Route after OR Solver.
     Three possible outcomes:
-    1. Feasible → proceed to simulation
+    1. Feasible → proceed to route optimization
     2. Infeasible + retries left → go to relaxation agent
     3. Infeasible + retries exhausted → go to insight (skip simulation) then end
 
@@ -717,8 +765,8 @@ def after_solver(state: AgentState) -> str:
             # Retries exhausted — go to insight to explain the partial result
             return "insight_node"
 
-    # Feasible — proceed to simulation
-    return "simulation_node"
+    # Feasible — optimize routes before simulation
+    return "route_optimization_node"
 
 
 def after_simulation(state: AgentState) -> str:
@@ -756,7 +804,7 @@ def build_graph() -> StateGraph:
 
     Node sequence:
     shipment_data_node -> validation_node -> compatibility_node ->
-    guardrail_node -> solver_node -> simulation_node -> insight_node ->
+    guardrail_node -> solver_node -> route_optimization_node -> simulation_node -> insight_node ->
     scenario_rec_node -> metrics_node
 
     With conditional edges for:
@@ -777,6 +825,7 @@ def build_graph() -> StateGraph:
     graph.add_node("compatibility_node", compatibility_node)
     graph.add_node("guardrail_node", guardrail_node)
     graph.add_node("solver_node", solver_node)
+    graph.add_node("route_optimization_node", route_optimization_node)
     graph.add_node("relaxation_node", relaxation_node)
     graph.add_node("simulation_node", simulation_node)
     graph.add_node("insight_node", insight_node)
@@ -810,12 +859,15 @@ def build_graph() -> StateGraph:
         "solver_node": "solver_node",
     })
 
-    # After solver: simulation if feasible, relaxation if infeasible, insight if retries exhausted
+    # After solver: route optimization if feasible, relaxation if infeasible, insight if retries exhausted
     graph.add_conditional_edges("solver_node", after_solver, {
-        "simulation_node": "simulation_node",
+        "route_optimization_node": "route_optimization_node",
         "relaxation_node": "relaxation_node",
         "insight_node": "insight_node",
     })
+
+    # After route optimization: proceed to simulation
+    graph.add_edge("route_optimization_node", "simulation_node")
 
     # After relaxation: retry the solver
     graph.add_edge("relaxation_node", "solver_node")
@@ -1030,6 +1082,7 @@ def run_pipeline(
         clean_plan = {
             "status": raw_plan.get("status"),
             "assigned": raw_plan.get("assigned", []),
+            "route_stats": raw_plan.get("route_stats"),
             "unassigned": [
                 s.get("shipment_id", "") if isinstance(s, dict) else s
                 for s in raw_plan.get("unassigned", [])

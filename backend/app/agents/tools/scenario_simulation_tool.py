@@ -23,6 +23,7 @@ import networkx as nx
 
 from backend.app.agents.tools.optimization_tool import run_optimization
 from backend.app.optimizer.metrics import compute_full_metrics
+from backend.app.optimizer.route_optimizer import optimize_all_routes
 
 
 # ---------------------------------------------------------------------------
@@ -242,6 +243,16 @@ def run_scenario(
         vehicles=modified_vehicles,
         compatibility_graph=compatibility_graph,
     )
+
+    # Optimize per-truck route sequences when assignments are available.
+    assignments = solver_result.get("assigned", [])
+    if assignments:
+        enriched_assignments, route_stats = optimize_all_routes(
+            assignments=assignments,
+            shipments=modified_shipments,
+        )
+        solver_result["assigned"] = enriched_assignments
+        solver_result["route_stats"] = route_stats
 
     assignments = solver_result.get("assigned", [])
 

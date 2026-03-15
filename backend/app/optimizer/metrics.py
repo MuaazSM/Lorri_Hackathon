@@ -150,11 +150,16 @@ def compute_full_metrics(
     baseline_carbon = baseline_distance * EMISSION_KG_PER_KM
 
     # Consolidated: each truck travels its combined route
+    # If assignments include optimized_route_km from route optimization,
+    # use that value instead of distance estimation.
     consolidated_distance = 0.0
     for a in assignments:
-        route_dist = _compute_route_distance(
-            a.get("shipment_ids", []), shipment_lookup
-        )
+        if "optimized_route_km" in a and a["optimized_route_km"] > 0:
+            route_dist = a["optimized_route_km"]
+        else:
+            route_dist = _compute_route_distance(
+                a.get("shipment_ids", []), shipment_lookup
+            )
         consolidated_distance += route_dist
 
     consolidated_carbon = consolidated_distance * EMISSION_KG_PER_KM
@@ -199,7 +204,10 @@ def compute_full_metrics(
 
         total_weight = sum(shipment_lookup.get(sid, {}).get("weight", 0) for sid in sids)
         total_volume = sum(shipment_lookup.get(sid, {}).get("volume", 0) for sid in sids)
-        route_dist = _compute_route_distance(sids, shipment_lookup)
+        if "optimized_route_km" in a and a["optimized_route_km"] > 0:
+            route_dist = a["optimized_route_km"]
+        else:
+            route_dist = _compute_route_distance(sids, shipment_lookup)
 
         per_truck.append({
             "vehicle_id": vid,
