@@ -20,3 +20,11 @@ from backend.app.models.plan import (
     ScenarioTypeEnum,
 )
 from backend.app.models.outcome import OptimizationOutcome
+from backend.app.models.customer import Customer, SLATierEnum
+from backend.app.models.depot import Depot
+from backend.app.models.driver import Driver
+from backend.app.models.lane_rate import LaneRate
+from backend.app.models.shipment_event import ShipmentEvent, EventTypeEnum
+from backend.app.models.ml_model_version import MLModelVersion
+from backend.app.models.alert import Alert, AlertTypeEnum, AlertSeverityEnum
+from backend.app.models.feedback import Feedback

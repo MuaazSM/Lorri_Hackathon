@@ -60,8 +60,12 @@ app.include_router(upload_router, tags=["Upload"])
 def on_startup():
     """
     Runs once when the server starts.
-    Creates all tables defined in our models if they don't already exist.
-    This replaces the need for Alembic migrations in dev — simple and fast.
+
+    In production, run SQL migrations first:
+        PYTHONPATH=. python -m backend.app.db.migrate up
+
+    create_all() is kept as a safety net — it only creates tables that
+    don't already exist, so it won't conflict with migrations.
     """
     Base.metadata.create_all(bind=engine)
 

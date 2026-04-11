@@ -15,7 +15,7 @@ Uses Google OR-Tools CP-SAT solver which handles binary integer programs
 efficiently. For instances >50 shipments, the optimization tool falls
 back to the heuristic in heuristic.py instead of calling this solver.
 
-This module provides the core formulation. Rajkumar can enhance it with:
+This module provides the core formulation. enhance it with:
 - Time window feasibility constraints
 - Route detour limits
 - Multi-objective weighting

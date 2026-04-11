@@ -9,7 +9,7 @@ This is the core input entity — the optimizer reads shipments and
 groups them into vehicle loads.
 """
 
-from sqlalchemy import Column, String, Float, DateTime, Enum as SAEnum
+from sqlalchemy import Column, String, Float, DateTime, ForeignKey, Enum as SAEnum
 from backend.app.db.base import Base
 import enum
 
@@ -68,3 +68,6 @@ class Shipment(Base):
 
     # Current processing status — updated as the shipment moves through the pipeline.
     status = Column(SAEnum(StatusEnum), default=StatusEnum.PENDING)
+
+    # Which customer owns this shipment — enables per-customer SLA tracking
+    customer_id = Column(String, ForeignKey("customers.customer_id"), nullable=True)

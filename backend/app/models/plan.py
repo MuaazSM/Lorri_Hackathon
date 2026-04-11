@@ -104,6 +104,9 @@ class PlanAssignment(Base):
     # instead of direct routes. Lower is better.
     route_detour_km = Column(Float, nullable=True)
 
+    # Which driver executed this trip — nullable until dispatch assigns one
+    driver_id = Column(String, ForeignKey("drivers.driver_id"), nullable=True)
+
 
 class ScenarioResult(Base):
     """

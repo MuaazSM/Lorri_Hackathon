@@ -71,7 +71,7 @@ export default function Optimize() {
       await seedData({ dataset: 'synthetic', shipment_count: 20, vehicle_count: 10 })
     setActiveStep(1)
     try {
-      const data = await runFullOptimization({ run_simulation: true, run_llm: false })
+      const data = await runFullOptimization({ run_simulation: false, run_llm: false })
       setActiveStep(2)
       if (data?.plan) {
         const fp = transformPlan(data)

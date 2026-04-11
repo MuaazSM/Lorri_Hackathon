@@ -7,7 +7,7 @@ feeds into the objective function — the solver minimizes total trip cost
 while maximizing utilization.
 """
 
-from sqlalchemy import Column, String, Float
+from sqlalchemy import Column, String, Float, ForeignKey
 from backend.app.db.base import Base
 
 
@@ -31,3 +31,6 @@ class Vehicle(Base):
     # Cost per trip for this vehicle (in currency units).
     # Used in the objective function: minimize total Σ operating_cost across used trucks.
     operating_cost = Column(Float, nullable=False)
+
+    # Assigned driver — nullable because not all vehicles have a permanent driver
+    driver_id = Column(String, ForeignKey("drivers.driver_id"), nullable=True)
