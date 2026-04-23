@@ -1,0 +1,675 @@
+/* ══════════════════════════════════════════════════════════════
+   LORRI AI — Unified App Pages CSS
+   Built on the landing page's design DNA (teal + lime).
+   Scoped under .app-page so it doesn't leak into the landing page.
+   ══════════════════════════════════════════════════════════════ */
+
+/* ─── Unified page accent system (lime-first, subtle secondary) ─── */
+:root {
+  --page-accent: #abff02;
+  --page-glow: #052424;
+  --page-glow-rgb: 5, 36, 36;
+  --page-secondary: #abff02;
+}
+
+body[data-page="shipments"] {
+  --page-secondary: #06b6d4;
+}
+body[data-page="optimize"] {
+  --page-secondary: #10b981;
+}
+body[data-page="scenarios"] {
+  --page-secondary: #8b5cf6;
+}
+body[data-page="insights"] {
+  --page-secondary: #f43f5e;
+}
+
+/* ─── App page foundation (matches landing page DNA) ─── */
+.app-page {
+  /* Surface colors — teal family, NOT pure black */
+  --surface: #052424;
+  --card: rgba(255, 255, 255, 0.04);
+  --card-hover: rgba(255, 255, 255, 0.06);
+  --border: rgba(255, 255, 255, 0.12);
+  --border-hover: rgba(255, 255, 255, 0.20);
+  --text-primary: #ffffff;
+  --text-secondary: #c2c2c2;
+  --text-muted: #7f7f7f;
+
+  --radius: 10px;
+  --radius-lg: 16px;
+
+  font-family: "Inter", "Inter Fallback", ui-sans-serif, system-ui, sans-serif;
+  background-color: var(--surface);
+  color: var(--text-primary);
+  min-height: 100vh;
+  position: relative;
+}
+
+.app-page h1,
+.app-page h2,
+.app-page h3,
+.app-page h4,
+.app-page h5,
+.app-page h6 {
+  font-family: "Inter", ui-sans-serif, system-ui, sans-serif;
+  font-weight: 600;
+}
+
+.app-page .font-mono {
+  font-family: "Geist Mono", "JetBrains Mono", monospace;
+}
+
+/* ─── Atmospheric background (subtle, restrained) ─── */
+.page-bg {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  background: var(--surface);
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.page-bg::before {
+  content: "";
+  position: absolute;
+  bottom: -20%;
+  right: -15%;
+  width: 80vw;
+  height: 80vw;
+  max-width: 1000px;
+  max-height: 1000px;
+  border-radius: 50%;
+  background: radial-gradient(
+    ellipse at center,
+    rgba(171, 255, 2, 0.06) 0%,
+    rgba(171, 255, 2, 0.03) 30%,
+    rgba(5, 36, 36, 0.02) 60%,
+    transparent 80%
+  );
+  will-change: transform, opacity;
+  animation: subtleGlow 8s ease-in-out infinite;
+}
+
+.page-bg::after {
+  content: "";
+  position: absolute;
+  top: -10%;
+  left: 5%;
+  width: 50vw;
+  height: 50vw;
+  max-width: 600px;
+  max-height: 600px;
+  border-radius: 50%;
+  background: radial-gradient(
+    ellipse at center,
+    rgba(171, 255, 2, 0.03) 0%,
+    transparent 60%
+  );
+  will-change: transform, opacity;
+  animation: subtleGlow 10s ease-in-out infinite reverse;
+}
+
+@keyframes subtleGlow {
+  0%,
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.7;
+    transform: scale(1.05);
+  }
+}
+
+/* ─── Dot grid texture (very subtle) ─── */
+.lorri-page::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  background-image: radial-gradient(
+    circle,
+    rgba(171, 255, 2, 0.06) 1px,
+    transparent 1px
+  );
+  background-size: 32px 32px;
+  pointer-events: none;
+  mask-image: radial-gradient(
+    ellipse 80% 80% at 50% 50%,
+    black 30%,
+    transparent 100%
+  );
+}
+
+/* ─── Layout ─── */
+#root,
+.app-page > * {
+  position: relative;
+  z-index: 1;
+}
+
+.lorri-page {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  overflow-x: clip;
+}
+
+/* ─── Cards (landing page style) ─── */
+.lorri-card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  transition: border-color 0.3s ease, background 0.3s ease;
+}
+.lorri-card:hover {
+  border-color: var(--border-hover);
+  background: var(--card-hover);
+}
+
+/* ─── Accent (always lime, with secondary for data highlights) ─── */
+.accent-text {
+  color: var(--page-accent);
+}
+.accent-border {
+  border-color: var(--page-accent);
+}
+.accent-glow {
+  box-shadow: 0 0 20px rgba(171, 255, 2, 0.15),
+    0 0 60px rgba(171, 255, 2, 0.05);
+}
+
+/* ─── Fox Mascot (now lime-based) ─── */
+.fox-stroke {
+  stroke: var(--page-accent);
+  fill: none;
+  transition: stroke 0.6s ease;
+}
+
+/* ─── Utilization bars ─── */
+.util-bar-bg {
+  background: rgba(255, 255, 255, 0.06);
+  border-radius: 9999px;
+  overflow: hidden;
+}
+.util-bar-fill {
+  height: 100%;
+  border-radius: 9999px;
+  background: linear-gradient(90deg, #052424, #abff02);
+  transition: width 1s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* ─── Hero sections (unified with landing page feel) ─── */
+.hero-wrap {
+  min-height: 60vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 8rem 2rem 4rem;
+  position: relative;
+  z-index: 1;
+}
+
+.hero-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 14px;
+  border-radius: 9999px;
+  border: 1px solid rgba(171, 255, 2, 0.3);
+  background: rgba(171, 255, 2, 0.06);
+  font-size: 0.75rem;
+  font-family: "Geist Mono", "JetBrains Mono", monospace;
+  color: var(--page-accent);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  margin-bottom: 2rem;
+  opacity: 0;
+  animation: fadeSlideUp 0.5s ease 0.1s forwards;
+}
+.hero-tag:hover {
+  background: rgba(171, 255, 2, 0.12);
+  border-color: var(--page-accent);
+}
+
+.hero-h1 {
+  font-size: clamp(2.5rem, 5.5vw, 5rem);
+  font-weight: 600;
+  line-height: 1.02;
+  letter-spacing: -0.03em;
+  margin-bottom: 1.4rem;
+}
+
+.hero-sub {
+  font-size: 1.1rem;
+  color: var(--text-secondary);
+  max-width: 540px;
+  line-height: 1.7;
+  margin-bottom: 2.5rem;
+}
+
+/* ─── Blur word animation (restrained) ─── */
+.blur-line {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.22em;
+  line-height: 1;
+  margin-bottom: 0.1em;
+  justify-content: center;
+}
+
+.blur-word {
+  display: inline-block;
+  opacity: 0;
+  filter: blur(4px);
+  transform: translateX(-8px);
+  will-change: transform, opacity, filter;
+  animation: blurWordIn 0.6s cubic-bezier(0.39, 0.575, 0.565, 1) forwards;
+}
+@keyframes blurWordIn {
+  0% {
+    opacity: 0;
+    filter: blur(4px);
+    transform: translateX(-8px);
+  }
+  60% {
+    opacity: 0.9;
+    filter: blur(1px);
+    transform: translateX(1px);
+  }
+  100% {
+    opacity: 1;
+    filter: blur(0);
+    transform: translateX(0);
+  }
+}
+
+.blur-word-sub {
+  display: inline-block;
+  opacity: 0;
+  transform: translateY(6px);
+  will-change: transform, opacity;
+  animation: fadeSlideUp 0.5s cubic-bezier(0.39, 0.575, 0.565, 1) forwards;
+}
+
+/* ─── Buttons (landing page style) ─── */
+.btn-primary {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 13px 30px;
+  border-radius: 9999px;
+  border: none;
+  background: var(--page-accent);
+  color: #052424;
+  font-weight: 600;
+  font-size: 0.9rem;
+  cursor: pointer;
+  font-family: inherit;
+  transition: all 0.3s ease;
+}
+.btn-primary:hover {
+  transform: translateY(-2px);
+  opacity: 0.9;
+}
+.btn-outline {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 13px 30px;
+  border-radius: 9999px;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text-primary);
+  font-weight: 600;
+  font-size: 0.9rem;
+  cursor: pointer;
+  font-family: inherit;
+  transition: all 0.3s ease;
+}
+.btn-outline:hover {
+  border-color: var(--page-accent);
+  color: var(--page-accent);
+}
+
+/* ─── Marquee (landing page feel) ─── */
+.marquee-wrap {
+  overflow: hidden;
+  border-top: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+  padding: 0.9rem 0;
+  position: relative;
+  z-index: 1;
+}
+.marquee-track {
+  display: flex;
+  gap: 0;
+  animation: marquee 22s linear infinite;
+  width: max-content;
+}
+.marquee-item {
+  font-family: "Geist Mono", "JetBrains Mono", monospace;
+  font-size: 0.7rem;
+  font-weight: 500;
+  color: var(--text-muted);
+  white-space: nowrap;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  padding: 0 2rem;
+}
+.marquee-dot {
+  color: var(--page-accent);
+  padding: 0 0.2rem;
+}
+@keyframes marquee {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-50%);
+  }
+}
+
+/* ─── Stats grid (landing page precision) ─── */
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  border-bottom: 1px solid var(--border);
+  position: relative;
+  z-index: 1;
+}
+.stat-cell {
+  padding: 2.5rem 3rem;
+  border-right: 1px solid var(--border);
+  position: relative;
+  overflow: hidden;
+  transition: background 0.3s;
+}
+.stat-cell:last-child {
+  border-right: none;
+}
+.stat-cell:hover {
+  background: rgba(171, 255, 2, 0.03);
+}
+.stat-cell::before {
+  content: "";
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    var(--page-accent),
+    transparent
+  );
+  transform: scaleX(0);
+  transition: transform 0.4s ease;
+}
+.stat-cell:hover::before {
+  transform: scaleX(1);
+}
+.stat-num {
+  font-size: 3rem;
+  font-weight: 600;
+  color: var(--page-accent);
+  line-height: 1;
+  margin-bottom: 0.4rem;
+  letter-spacing: -0.02em;
+}
+.stat-label {
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+  margin-bottom: 2px;
+  font-weight: 500;
+}
+.stat-sub {
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  font-family: "Geist Mono", "JetBrains Mono", monospace;
+}
+
+/* ─── Section divider ─── */
+.section-divider {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 3.5rem 3rem 0;
+}
+.section-divider-label {
+  font-size: 0.7rem;
+  font-family: "Geist Mono", "JetBrains Mono", monospace;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  white-space: nowrap;
+}
+.section-divider-line {
+  flex: 1;
+  height: 1px;
+  background: var(--border);
+}
+
+/* ─── CTA section ─── */
+.cta-section {
+  border-top: 1px solid var(--border);
+  position: relative;
+  z-index: 1;
+}
+.cta-inner {
+  padding: 6rem 3rem;
+  text-align: center;
+}
+.cta-h2 {
+  font-size: clamp(2rem, 4vw, 3.5rem);
+  font-weight: 600;
+  letter-spacing: -0.025em;
+  line-height: 1.1;
+  margin-bottom: 1rem;
+}
+.cta-sub {
+  font-size: 1rem;
+  color: var(--text-secondary);
+  margin-bottom: 2.5rem;
+}
+
+/* ─── Footer (matches landing) ─── */
+.lorri-footer {
+  border-top: 1px solid var(--border);
+  position: relative;
+  z-index: 1;
+}
+.footer-grid {
+  padding: 3.5rem 3rem 2rem;
+  display: grid;
+  grid-template-columns: 2fr 1fr 1fr 1fr;
+  gap: 3rem;
+}
+.footer-brand {
+  font-size: 1.15rem;
+  font-weight: 600;
+  color: var(--page-accent);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 0.6rem;
+}
+.footer-desc {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  line-height: 1.7;
+  max-width: 230px;
+  margin-bottom: 1.2rem;
+}
+.footer-col-title {
+  font-size: 0.72rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--text-secondary);
+  margin-bottom: 1.1rem;
+}
+.footer-link {
+  display: block;
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  margin-bottom: 0.55rem;
+  cursor: pointer;
+  text-decoration: none;
+  transition: color 0.3s ease;
+  width: fit-content;
+}
+.footer-link:hover {
+  color: var(--page-accent);
+}
+.footer-bottom {
+  border-top: 1px solid var(--border);
+  padding: 1.2rem 3rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.footer-bottom-l {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  font-family: "Geist Mono", "JetBrains Mono", monospace;
+}
+.footer-bottom-r {
+  display: flex;
+  gap: 1.5rem;
+}
+.footer-bottom-link {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: color 0.3s;
+}
+.footer-bottom-link:hover {
+  color: var(--page-accent);
+}
+
+/* ─── Scroll hint ─── */
+.scroll-hint {
+  position: absolute;
+  bottom: 2.5rem;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+.scroll-line {
+  width: 1px;
+  height: 40px;
+  background: linear-gradient(to bottom, var(--page-accent), transparent);
+  animation: scrollPulse 2s ease-in-out infinite;
+}
+@keyframes scrollPulse {
+  0%,
+  100% {
+    opacity: 0.4;
+    transform: scaleY(1);
+  }
+  50% {
+    opacity: 1;
+    transform: scaleY(1.15);
+  }
+}
+
+/* ─── Animations (landing page easing) ─── */
+@keyframes fadeSlideUp {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.page-enter {
+  animation: fadeSlideUp 0.4s ease forwards;
+}
+
+/* ─── Scrollbar (landing page style) ─── */
+.app-page ::-webkit-scrollbar {
+  width: 6px;
+}
+.app-page ::-webkit-scrollbar-track {
+  background: var(--surface);
+}
+.app-page ::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 9999px;
+}
+.app-page ::-webkit-scrollbar-thumb:hover {
+  background: var(--page-accent);
+}
+
+/* ─── Leaflet dark map ─── */
+.leaflet-container {
+  background: #052424 !important;
+  border-radius: var(--radius);
+}
+.leaflet-tile {
+  filter: brightness(0.5) saturate(0.4);
+}
+
+/* ─── Recharts override ─── */
+.recharts-cartesian-grid-horizontal line,
+.recharts-cartesian-grid-vertical line {
+  stroke: var(--border) !important;
+}
+.recharts-text {
+  fill: var(--text-muted) !important;
+}
+
+/* ─── Tooltip ─── */
+.tooltip-wrap {
+  position: relative;
+  display: block;
+  width: fit-content;
+}
+.tooltip-wrap .tooltip-box {
+  visibility: hidden;
+  opacity: 0;
+  position: fixed;
+  background: rgba(5, 36, 36, 0.95);
+  border: 1px solid rgba(171, 255, 2, 0.3);
+  color: var(--page-accent);
+  font-size: 0.7rem;
+  font-family: "Geist Mono", monospace;
+  letter-spacing: 0.08em;
+  padding: 5px 12px;
+  border-radius: 8px;
+  width: 200px;
+  text-align: center;
+  line-height: 1.5;
+  pointer-events: none;
+  transition: opacity 0.2s ease;
+  z-index: 9999;
+}
+.tooltip-wrap:hover .tooltip-box {
+  visibility: visible;
+  opacity: 1;
+}
+
+/* ─── Home section base ─── */
+.home-section {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+}
+.home-inner {
+  max-width: 1160px;
+  margin: 0 auto;
+  padding: 0 3rem;
+}

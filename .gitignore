@@ -43,6 +43,6 @@ dist/
 .ipynb_checkpoints/
 
 node_modules/
-
+.next/
 .claude/
 CLAUDE.md
