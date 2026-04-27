@@ -19,11 +19,11 @@
 
 ## 🎬 Live Demo
 
-<video src="demo.mp4" controls width="100%"></video>
+[▶️ Watch the Demo Video](https://drive.google.com/file/d/1vLUPF0m7lsdRIREEIXc_K43BaaSojPh0/view)
 
 ## 📑 Presentation
 
-[📄 View the Lorri AI Pitch Deck (PDF)](LogisticsNow%20Hackathon.pdf)
+[📄 View the Lorri AI Pitch Deck](https://drive.google.com/file/d/1c9sJA2s3QrO1u2UjkFQ7-uwHJVMyrN4D/view?usp=sharing)
 
 ---
 
