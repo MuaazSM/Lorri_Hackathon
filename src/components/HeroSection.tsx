@@ -156,9 +156,8 @@ export function HeroSection() {
           />
         </div>
 
-        {/* Gradient overlays for text readability */}
-        <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-[#052424] via-[#052424]/40 to-[#052424]/20" />
-        <div className="pointer-events-none absolute inset-x-0 bottom-0 h-1/3 bg-gradient-to-t from-[#052424] to-transparent" />
+        {/* Bottom fade to match page background */}
+        <div className="pointer-events-none absolute inset-x-0 bottom-0 h-1/3 bg-gradient-to-t from-[#0a0a0a] to-transparent" />
 
         {/* === Initial headline (bottom-aligned) === */}
         <div

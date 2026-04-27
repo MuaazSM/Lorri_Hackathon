@@ -6,7 +6,6 @@ import { BenefitSections } from "@/components/BenefitSection";
 import { LogoWall } from "@/components/LogoWall";
 import { Testimonial } from "@/components/Testimonial";
 import { HowItWorks } from "@/components/HowItWorks";
-import { ContactForm } from "@/components/ContactForm";
 import { Footer } from "@/components/Footer";
 import { logoWall, trustedBy, testimonial } from "@/content/copy";
 
@@ -46,8 +45,6 @@ export default function Home() {
         {/* How it works with odometer counters */}
         <HowItWorks />
 
-        {/* Contact form */}
-        <ContactForm />
       </main>
 
       <Footer />
