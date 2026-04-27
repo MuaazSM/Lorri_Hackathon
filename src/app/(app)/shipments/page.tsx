@@ -8,38 +8,7 @@ import { useApp } from '@/context/AppContext'
 const GlobeMap = dynamic(() => import('@/components/app/GlobeMap'), { ssr: false })
 import UploadZone from '@/components/app/UploadZone'
 
-/* ── Shipment & truck demo data ── */
-const SHIPMENTS = [
-  { id: 'S001', origin: 'Mumbai', dest: 'Pune', weight: 850, volume: 12, priority: 'High', window: '08:00-14:00', status: 'Consolidated', truck: 'V001', group: 'G1' },
-  { id: 'S002', origin: 'Mumbai', dest: 'Pune', weight: 620, volume: 9, priority: 'Medium', window: '07:30-15:00', status: 'Consolidated', truck: 'V001', group: 'G1' },
-  { id: 'S003', origin: 'Pune', dest: 'Delhi', weight: 1100, volume: 18, priority: 'High', window: '09:00-20:00', status: 'Consolidated', truck: 'V004', group: 'G2' },
-  { id: 'S004', origin: 'Mumbai', dest: 'Delhi', weight: 450, volume: 7, priority: 'Low', window: '10:00-22:00', status: 'Standalone', truck: 'V003', group: 'G3' },
-  { id: 'S005', origin: 'Mumbai', dest: 'Pune', weight: 300, volume: 5, priority: 'Medium', window: '08:00-16:00', status: 'Consolidated', truck: 'V001', group: 'G1' },
-  { id: 'S006', origin: 'Pune', dest: 'Delhi', weight: 780, volume: 11, priority: 'Medium', window: '10:00-21:00', status: 'Consolidated', truck: 'V004', group: 'G2' },
-]
-
-const TRUCKS = [
-  { id: 'V001', route: 'Mumbai -> Pune', shipments: ['S001', 'S002', 'S005'], util: 91, load: 1770, cap: 2000, color: '#f59e0b' },
-  { id: 'V003', route: 'Mumbai -> Delhi', shipments: ['S004'], util: 32, load: 450, cap: 1500, color: '#06b6d4' },
-  { id: 'V004', route: 'Pune -> Delhi', shipments: ['S003', 'S006'], util: 97, load: 1880, cap: 2000, color: '#10b981' },
-]
-
-const STATS = [
-  { label: 'Total Shipments', raw: 6, suffix: '', prefix: '' },
-  { label: 'Trucks Assigned', raw: 3, suffix: '', prefix: '' },
-  { label: 'Total Weight', raw: 4100, suffix: 'kg', prefix: '' },
-  { label: 'Avg Utilization', raw: 76, suffix: '%', prefix: '' },
-]
-
-const LANES = ['All', 'Mumbai -> Pune', 'Pune -> Delhi', 'Mumbai -> Delhi']
-
-const ARCS = [
-  { label: 'G1 . V001 . Mumbai->Pune', color: '#f59e0b', ids: ['S001', 'S002', 'S005'] },
-  { label: 'G2 . V004 . Pune->Delhi', color: '#10b981', ids: ['S003', 'S006'] },
-  { label: 'G3 . V003 . Mumbai->Delhi', color: '#06b6d4', ids: ['S004'] },
-]
-
-const GROUP_COLORS: Record<string, string> = { G1: '#f59e0b', G2: '#10b981', G3: '#06b6d4' }
+const TRUCK_COLORS = ['#f59e0b', '#10b981', '#06b6d4', '#8b5cf6', '#ec4899', '#ef4444', '#14b8a6', '#f97316']
 const PRIORITY_COLORS: Record<string, string> = { High: '#ef4444', Medium: '#f59e0b', Low: '#6b7280' }
 
 interface DemoShipment {
@@ -106,20 +75,11 @@ export default function ShipmentsPage() {
     return () => clearTimeout(timer)
   }, [])
 
-  const c0 = useCounter(STATS[0].raw, 1400, statsVisible)
-  const c1 = useCounter(STATS[1].raw, 1600, statsVisible)
-  const c2 = useCounter(STATS[2].raw, 1800, statsVisible)
-  const c3 = useCounter(STATS[3].raw, 1500, statsVisible)
-  const counters = [c0, c1, c2, c3]
-
   // Map API shipments to the page's expected shape
   const liveData = useMemo(() => {
-    if (!apiShipments?.length) return null
-
     const assignmentMap: Record<string, { truck: string; group: string; color: string }> = {}
     const trucksArr: DemoTruck[] = []
     const plan = (optimizationResult as Record<string, unknown>)?.plan as Record<string, unknown> | undefined
-    const TRUCK_COLORS = ['#f59e0b', '#10b981', '#06b6d4', '#8b5cf6', '#ec4899']
     const assigned = (plan?.assigned ?? []) as Array<Record<string, unknown>>
     if (assigned.length) {
       assigned.forEach((a, idx) => {
@@ -141,7 +101,7 @@ export default function ShipmentsPage() {
       })
     }
 
-    const shipments: DemoShipment[] = apiShipments.map(s => {
+    const shipments: DemoShipment[] = (apiShipments || []).map(s => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const sid: string = (s as any).shipment_id || s.id
       const assign = assignmentMap[sid] || {}
@@ -167,7 +127,7 @@ export default function ShipmentsPage() {
       }
     })
 
-    const totalWeight = shipments.reduce((sum, s) => sum + s.weight, 0)
+    const totalWeight = Math.round(shipments.reduce((sum, s) => sum + s.weight, 0))
     const avgUtil = trucksArr.length ? Math.round(trucksArr.reduce((s, t) => s + t.util, 0) / trucksArr.length) : 0
     const laneSet = new Set(shipments.map(s => `${s.origin} -> ${s.dest}`))
 
@@ -184,9 +144,16 @@ export default function ShipmentsPage() {
     }
   }, [apiShipments, optimizationResult])
 
-  const shipmentList: DemoShipment[] = liveData?.shipments || SHIPMENTS
-  const truckList: DemoTruck[] = liveData?.trucks?.length ? liveData.trucks : TRUCKS
-  const laneList = liveData?.lanes || LANES
+  const shipmentList = liveData.shipments
+  const truckList = liveData.trucks
+  const laneList = liveData.lanes
+  const STATS = liveData.stats
+
+  const c0 = useCounter(STATS[0].raw, 1400, statsVisible)
+  const c1 = useCounter(STATS[1].raw, 1600, statsVisible)
+  const c2 = useCounter(STATS[2].raw, 1800, statsVisible)
+  const c3 = useCounter(STATS[3].raw, 1500, statsVisible)
+  const counters = [c0, c1, c2, c3]
 
   const filtered = filter === 'All' ? shipmentList : shipmentList.filter(s => `${s.origin} -> ${s.dest}` === filter)
   const selShipment = shipmentList.find(s => s.id === selected) ?? null
@@ -298,14 +265,15 @@ export default function ShipmentsPage() {
               <span style={{ fontSize: '0.68rem', fontFamily: "'JetBrains Mono',monospace", color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.12em' }}>
                 / route map . india shipment lanes
               </span>
-              <span style={{ fontSize: '0.65rem', padding: '2px 8px', borderRadius: 5, fontFamily: "'JetBrains Mono',monospace", background: 'rgba(var(--page-glow-rgb),0.1)', border: '1px solid rgba(var(--page-glow-rgb),0.3)', color: 'var(--page-accent)' }}>Demo</span>
+              <span style={{ fontSize: '0.65rem', padding: '2px 8px', borderRadius: 5, fontFamily: "'JetBrains Mono',monospace", background: 'rgba(var(--page-glow-rgb),0.1)', border: '1px solid rgba(var(--page-glow-rgb),0.3)', color: 'var(--page-accent)' }}>{shipmentList.length ? 'Live' : 'No Data'}</span>
             </div>
-            <GlobeMap filter={filter} />
+            {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
+            <GlobeMap filter={filter} shipments={shipmentList as any} />
             <div className="globe-legend">
-              {ARCS.map(a => (
-                <div key={a.label} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: '0.65rem', fontFamily: "'JetBrains Mono',monospace", color: 'var(--text-muted)' }}>
-                  <div style={{ width: 24, height: 2, background: a.color, borderRadius: 1, boxShadow: `0 0 6px ${a.color}` }} />
-                  {a.label}
+              {laneList.filter(l => l !== 'All').map((lane, i) => (
+                <div key={lane} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: '0.65rem', fontFamily: "'JetBrains Mono',monospace", color: 'var(--text-muted)' }}>
+                  <div style={{ width: 24, height: 2, background: TRUCK_COLORS[i % TRUCK_COLORS.length], borderRadius: 1, boxShadow: `0 0 6px ${TRUCK_COLORS[i % TRUCK_COLORS.length]}` }} />
+                  {lane}
                 </div>
               ))}
             </div>
@@ -333,8 +301,8 @@ export default function ShipmentsPage() {
                   {filtered.map((s, idx) => (
                     <tr key={s.id || idx} className={selected === s.id ? 'sel' : ''} onClick={() => setSelected(selected === s.id ? null : s.id)}>
                       <td>
-                        <span style={{ fontFamily: "'JetBrains Mono',monospace", fontWeight: 700, color: s._color || GROUP_COLORS[s.group] || '#6b7280', display: 'flex', alignItems: 'center', gap: 6 }}>
-                          <span style={{ width: 7, height: 7, borderRadius: '50%', background: s._color || GROUP_COLORS[s.group] || '#6b7280', display: 'inline-block', boxShadow: `0 0 6px ${s._color || GROUP_COLORS[s.group] || '#6b7280'}` }} />
+                        <span style={{ fontFamily: "'JetBrains Mono',monospace", fontWeight: 700, color: s._color || s._color || '#6b7280', display: 'flex', alignItems: 'center', gap: 6 }}>
+                          <span style={{ width: 7, height: 7, borderRadius: '50%', background: s._color || s._color || '#6b7280', display: 'inline-block', boxShadow: `0 0 6px ${s._color || s._color || '#6b7280'}` }} />
                           {s.id}
                         </span>
                       </td>
@@ -362,9 +330,9 @@ export default function ShipmentsPage() {
             <div>
               {/* Shipment detail drawer */}
               {selShipment && (
-                <div className="sidebar-card" style={{ borderColor: `${selShipment._color || GROUP_COLORS[selShipment.group] || '#6b7280'}44`, animation: 'fadeSlideUp 0.3s ease forwards' }}>
+                <div className="sidebar-card" style={{ borderColor: `${selShipment._color || selShipment._color || '#6b7280'}44`, animation: 'fadeSlideUp 0.3s ease forwards' }}>
                   <div className="sidebar-card-header">
-                    <span style={{ fontFamily: "'Syne',sans-serif", fontSize: '1rem', fontWeight: 700, color: selShipment._color || GROUP_COLORS[selShipment.group] || '#6b7280' }}>{selShipment.id}</span>
+                    <span style={{ fontFamily: "'Syne',sans-serif", fontSize: '1rem', fontWeight: 700, color: selShipment._color || selShipment._color || '#6b7280' }}>{selShipment.id}</span>
                     <button onClick={() => setSelected(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', fontSize: '1rem', lineHeight: 1 }}>x</button>
                   </div>
                   <div className="sidebar-card-body">
