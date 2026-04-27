@@ -22,6 +22,8 @@ from sqlalchemy.orm import Session
 from backend.app.db.session import get_db
 from backend.app.models.shipment import Shipment
 from backend.app.models.vehicle import Vehicle
+from backend.app.models.plan import ConsolidationPlan, PlanAssignment, ScenarioResult
+from backend.app.models.outcome import OptimizationOutcome
 from backend.app.data_loader.synthetic_generator import SyntheticGenerator
 from backend.app.data_loader.solomon_mapper import (
     load_c101, load_r101, get_benchmark_info,
@@ -60,8 +62,12 @@ def seed_data(
     Solomon datasets are read from dataset/C1/C101.csv and dataset/R1/R101.csv.
     Use max_customers=25 for quick tests, omit for full 100-customer instance.
     """
-    # Optionally wipe existing data
+    # Optionally wipe existing data (delete in FK-safe order)
     if clear:
+        db.query(ScenarioResult).delete()
+        db.query(PlanAssignment).delete()
+        db.query(OptimizationOutcome).delete()
+        db.query(ConsolidationPlan).delete()
         db.query(Shipment).delete()
         db.query(Vehicle).delete()
         db.commit()
