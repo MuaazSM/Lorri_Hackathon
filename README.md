@@ -64,7 +64,7 @@ The problem statement requires four deliverables. Here's how Lorri AI addresses 
 ### 2. Visualization Dashboard ✅
 | Requirement | Lorri AI Implementation |
 |---|---|
-| Shipment grouping visualization | React dashboard with Leaflet map showing origin→destination routes color-coded by consolidation group. Assignment cards show which shipments are on which truck. |
+| Shipment grouping visualization | Next.js dashboard with Leaflet map showing origin→destination routes color-coded by consolidation group. Assignment cards show which shipments are on which truck. |
 | Vehicle utilization analysis | Recharts-powered utilization bars, before/after comparison cards, per-truck breakdown with weight and volume metrics. Fleet usage gauges. |
 
 ### 3. Performance Simulation ✅
@@ -122,8 +122,8 @@ Lorri AI is built as a **three-layer intelligence system** where each layer ampl
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│                    ⚛️  React Frontend                           │
-│         Dashboard · Optimization · Scenarios · History          │
+│                    ⚛️  Next.js Frontend                          │
+│         Dashboard · Optimization · Scenarios · Insights          │
 └─────────────────────┬───────────────────────────────────────────┘
                       │ REST API
 ┌─────────────────────▼───────────────────────────────────────────┐
@@ -273,7 +273,7 @@ Solver feasible      → Simulate → Insight → Recommend → Learn → END
 
 | Layer | Technology |
 |---|---|
-| **Frontend** | React 18 + Vite + Tailwind CSS + Recharts + Leaflet + shadcn/ui |
+| **Frontend** | Next.js 16 + React 19 + Tailwind CSS 4 + Recharts + Leaflet + shadcn/ui |
 | **Backend** | FastAPI + Uvicorn + SQLAlchemy + Pydantic |
 | **Agents** | LangGraph (state graph with typed state, conditional edges, retry loops) |
 | **ML** | scikit-learn (RandomForest, 400 trees, 14 features, F1=0.84) |
@@ -298,7 +298,7 @@ Solver feasible      → Simulate → Insight → Recommend → Learn → END
 
 ```bash
 # Clone the repo
-git clone https://github.com/your-repo/Lorri_Hackathon.git
+git clone https://github.com/MuaazSM/Lorri_Hackathon.git
 cd Lorri_Hackathon
 
 # Set up Python environment
@@ -449,7 +449,19 @@ Lorri_Hackathon/
 │   ├── Dockerfile
 │   ├── requirements.txt
 │   └── .env.example
-├── frontend/                                # React + Vite + Tailwind
+├── src/                                     # Next.js + React + Tailwind
+│   ├── app/                                 # App Router pages
+│   │   ├── page.tsx                         # Landing page
+│   │   └── (app)/                           # Authenticated app routes
+│   │       ├── shipments/page.tsx           # Shipment list + map
+│   │       ├── optimize/page.jsx            # MIP solver UI
+│   │       ├── insights/page.jsx            # LangGraph agent pipeline
+│   │       └── scenarios/page.jsx           # What-if scenario comparison
+│   ├── components/                          # Reusable UI components
+│   ├── context/AppContext.tsx               # Global state provider
+│   ├── hooks/                               # Custom React hooks
+│   ├── services/api.ts                      # Axios API client
+│   └── data/demoData.ts                     # Hardcoded demo data
 ├── dataset/
 │   ├── C1/C101.csv                          # Solomon clustered benchmark
 │   └── R1/R101.csv                          # Solomon random benchmark
