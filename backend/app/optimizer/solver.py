@@ -319,10 +319,20 @@ def _parse_solution(
             for idx in range(len(dest_list) - 1):
                 detour += get_distance(dest_list[idx], dest_list[idx + 1])
 
+        # Build route description from origins/destinations
+        route_origins = list(origins)
+        route_dests = list(destinations)
+        route_desc = f"{', '.join(route_origins)} → {', '.join(route_dests)}" if route_origins and route_dests else "N/A"
+
         assigned.append({
             "vehicle_id": vehicle["vehicle_id"],
+            "vehicle_type": vehicle.get("vehicle_type", vehicle["vehicle_id"]),
             "shipment_ids": [s.get("shipment_id", "") for s in truck_shipments],
+            "total_weight": round(total_w, 1),
+            "capacity_weight": round(cap_w, 1),
             "utilization_pct": round(utilization, 1),
+            "route": route_desc,
+            "cost": vehicle.get("operating_cost", 0),
             "route_detour_km": round(detour, 1),
         })
 

@@ -138,11 +138,20 @@ def first_fit_decreasing(
         util_v = (total_v / cap_v) * 100 if cap_v > 0 else 0
         utilization = max(util_w, util_v)
 
+        origins = list(set(s.get("origin", "") for s in load))
+        destinations = list(set(s.get("destination", "") for s in load))
+        route_desc = f"{', '.join(origins)} → {', '.join(destinations)}" if origins and destinations else "N/A"
+
         assigned.append({
             "vehicle_id": vid,
+            "vehicle_type": vehicle.get("vehicle_type", vid),
             "shipment_ids": [s.get("shipment_id", "") for s in load],
+            "total_weight": round(total_w, 1),
+            "capacity_weight": round(cap_w, 1),
             "utilization_pct": round(utilization, 1),
-            "route_detour_km": 0.0,  # Heuristic doesn't compute detours
+            "route": route_desc,
+            "cost": vehicle.get("operating_cost", 0),
+            "route_detour_km": 0.0,
         })
 
     # Compute plan-level metrics

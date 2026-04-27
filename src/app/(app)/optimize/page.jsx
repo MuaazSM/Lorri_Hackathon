@@ -17,11 +17,12 @@ const SOLVE_STEPS = [
   { label: 'Generating AI insights',        detail: 'LangGraph agents analysing output' },
 ]
 
-const STATS = [
-  { label: 'Shipments',      raw: 6,  suffix: '',  prefix: '' },
-  { label: 'Trucks Needed',  raw: 3,  suffix: '',  prefix: '' },
-  { label: 'Cost Reduction', raw: 44, suffix: '%', prefix: '' },
-  { label: 'Max Util',       raw: 91, suffix: '%', prefix: '' },
+// Stats derived dynamically after optimization
+const DEFAULT_STATS = [
+  { label: 'Shipments',      raw: 0,  suffix: '',  prefix: '' },
+  { label: 'Trucks Needed',  raw: 0,  suffix: '',  prefix: '' },
+  { label: 'Cost Reduction', raw: 0, suffix: '%', prefix: '' },
+  { label: 'Max Util',       raw: 0, suffix: '%', prefix: '' },
 ]
 
 function useCounter(target, duration = 1800, start = false) {
@@ -59,6 +60,23 @@ export default function OptimizePage() {
     }, 300)
     return () => clearTimeout(timer)
   }, [])
+  // Build live stats from plan or use defaults
+  const STATS = plan && plan !== DEMO_PLAN
+    ? [
+        { label: 'Shipments',      raw: shipments?.length || 0,  suffix: '',  prefix: '' },
+        { label: 'Trucks Needed',  raw: plan.total_trucks || 0,  suffix: '',  prefix: '' },
+        { label: 'Cost Reduction', raw: plan.cost_saving_pct || 0, suffix: '%', prefix: '' },
+        { label: 'Max Util',       raw: plan.avg_utilization || 0, suffix: '%', prefix: '' },
+      ]
+    : shipments?.length > 0
+      ? [
+          { label: 'Shipments',      raw: shipments.length,  suffix: '',  prefix: '' },
+          { label: 'Trucks Needed',  raw: 0,  suffix: '',  prefix: '' },
+          { label: 'Cost Reduction', raw: 0, suffix: '%', prefix: '' },
+          { label: 'Max Util',       raw: 0, suffix: '%', prefix: '' },
+        ]
+      : DEFAULT_STATS
+
   const c0 = useCounter(STATS[0].raw, 1400, statsVisible)
   const c1 = useCounter(STATS[1].raw, 1600, statsVisible)
   const c2 = useCounter(STATS[2].raw, 1800, statsVisible)
@@ -77,30 +95,23 @@ export default function OptimizePage() {
       setActiveStep(2)
       if (data?.plan) {
         const fp = transformPlan(data)
-        setPlan(fp || DEMO_PLAN)
+        setPlan(fp)
         if (data.metrics) setApiMetrics(data.metrics)
-      } else { setPlan(DEMO_PLAN) }
+      }
       setStatus('done')
     } catch {
-      setPlan(DEMO_PLAN); setStatus('done')
+      setStatus('done')
     }
     setActiveStep(-1)
   }
 
   const bannerStats = plan && plan !== DEMO_PLAN
     ? [[`${plan.total_trucks}`,'Trucks'],[`${plan.avg_utilization??0}%`,'Utilization'],[`${plan.cost_saving_pct??0}%`,'Saved']]
-    : [['₹13.5k','Cost Total'],['44%','Saved'],['91%','Max Util']]
+    : [['—','Trucks'],['—','Utilization'],['—','Saved']]
 
   const shipmentList = shipments.length > 0
-    ? shipments.slice(0,10).map(s => ({ id:s.shipment_id, route:`${s.origin} → ${s.destination}`, wt:`${s.weight} kg` }))
-    : [
-        { id:'S001', route:'Mumbai → Pune',  wt:'850 kg'  },
-        { id:'S002', route:'Mumbai → Pune',  wt:'620 kg'  },
-        { id:'S003', route:'Pune → Delhi',   wt:'1100 kg' },
-        { id:'S004', route:'Mumbai → Delhi', wt:'450 kg'  },
-        { id:'S005', route:'Mumbai → Pune',  wt:'300 kg'  },
-        { id:'S006', route:'Pune → Delhi',   wt:'780 kg'  },
-      ]
+    ? shipments.map(s => ({ id: s.shipment_id || s.id, route: `${s.origin} → ${s.destination}`, wt: `${s.weight} kg` }))
+    : []
 
   return (
     <>
